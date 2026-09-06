@@ -1,0 +1,12 @@
+﻿services:
+  - type: web
+    name: enterprise-legal-ai-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app/frontend.py --server.address 0.0.0.0 --server.port $PORT
+    envVars:
+      - key: ENABLE_REAL_LLM
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.11.11"
