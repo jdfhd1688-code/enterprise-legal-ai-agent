@@ -1,0 +1,3 @@
+# Optional FAISS backend. Without it the app uses the built-in numpy fallback.
+-r requirements.txt
+faiss-cpu>=1.8,<2.0

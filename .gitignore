@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.DS_Store
+Thumbs.db
+data/tasks/*.json
+data/uploads/
+data/contracts/*.pdf
+!data/contracts/README.md
+!data/contracts/sample_contract.pdf
+!data/contracts/sample_contract_high_risk.pdf
+!data/contracts/sample_contract_low_risk.pdf
