@@ -17,7 +17,7 @@ from app.schemas.risk import ReviewDecision, Severity
 from app.schemas.task import TaskRecord
 from app.services.analysis_service import AnalysisService
 from app.styles import APP_CSS
-from app.ui_components import badge, choice_copy, esc, metric_cards, page_header, section, step_header
+from app.ui_components import badge, choice_copy, esc, metric_cards, page_header, section, step_header, workflow_steps
 
 
 @st.cache_resource(show_spinner=False)
@@ -43,14 +43,8 @@ REVIEW_DIMENSIONS_UI = [item for item in REVIEW_DIMENSIONS if item != "general_c
 
 def go(page: str, task_id: str | None = None) -> None:
     st.session_state["page"] = page
-    if page in NAV_ITEMS:
-        st.session_state["_nav_target"] = page
     if task_id:
         st.session_state["selected_task_id"] = task_id
-
-
-def nav_changed() -> None:
-    st.session_state["page"] = st.session_state["nav_choice"]
 
 
 def format_time(value: datetime | None) -> str:
@@ -81,22 +75,23 @@ def task_dimension(task: TaskRecord) -> str:
 
 def render_sidebar(service: AnalysisService) -> None:
     page = st.session_state.get("page", "dashboard")
-    pending_nav = st.session_state.pop("_nav_target", None)
-    if pending_nav in NAV_ITEMS:
-        st.session_state["nav_choice"] = pending_nav
-    if "nav_choice" not in st.session_state:
-        st.session_state["nav_choice"] = page if page in NAV_ITEMS else "dashboard"
     with st.sidebar:
         st.markdown(
-            """<div class="sidebar-brand"><div class="sidebar-mark">EL</div>
-            <div class="sidebar-name">Enterprise Legal AI</div>
-            <div class="sidebar-sub">企业合同智能审查工作台</div></div>""",
+            """<div class="sidebar-brand"><div class="sidebar-brand-row"><div class="sidebar-mark">EL</div>
+            <div><div class="sidebar-name">Enterprise Legal AI</div>
+            <div class="sidebar-sub">企业法务智能工作台</div></div></div></div>
+            <div class="nav-section-label">主工作区</div>""",
             unsafe_allow_html=True,
         )
-        st.radio("主导航", list(NAV_ITEMS), format_func=NAV_ITEMS.get, label_visibility="collapsed", key="nav_choice", on_change=nav_changed)
+        for key, label in NAV_ITEMS.items():
+            if st.button(label, key=f"nav_{key}", type="primary" if page == key else "secondary", width="stretch"):
+                go(key)
+                st.rerun()
         mode = "DEMO MODE" if service.settings.demo_mode else "REAL LLM"
         st.markdown(
-            f'<div class="sidebar-footer">{badge(mode, "neutral")}<br/>AI 辅助审查结果不构成正式法律意见。<br/>v1.0 · Stage 1</div>',
+            f'<div class="sidebar-footer"><div class="sidebar-status"><span></span>{esc(mode)}</div>'
+            '<div class="sidebar-footer-title">安全与合规提示</div><div>AI 辅助审查结果不构成正式法律意见。</div>'
+            '<div class="sidebar-version">STAGE 1 · PRODUCT UI</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -106,15 +101,32 @@ def dashboard_page(service: AnalysisService) -> None:
     live = bool(tasks)
     high_count = sum(task_level(task) == "high" for task in tasks)
     review_count = sum(task.status.value == "awaiting_review" for task in tasks)
+    st.markdown('<div class="dashboard-page-marker"></div>', unsafe_allow_html=True)
     page_header(
-        "Enterprise Legal AI Agent", "企业合同智能审查与风险复核工作台",
-        "辅助企业法务完成合同风险识别、法规依据检索、风险分级与人工复核。", service.settings.demo_mode,
+        "工作台", "企业合同智能审查与风险复核工作台",
+        "统一管理合同风险识别、法规依据、法务复核与报告交付。", service.settings.demo_mode,
     )
-    left, right = st.columns([4, 1.15], vertical_alignment="center")
-    left.caption("今日工作概览 · 风险与任务状态汇总")
-    if right.button("＋ 新建合同审查", type="primary", width="stretch", key="dashboard_new"):
-        go("review")
-        st.rerun()
+    hero_main, hero_action = st.columns([2.15, 1], gap="large", vertical_alignment="top")
+    with hero_main:
+        st.markdown(
+            '<div class="dashboard-hero"><div class="hero-kicker">LEGAL RISK CONTROL CENTER</div>'
+            '<div class="hero-title">让每一份合同风险<br/>都有依据、有结论、有追踪</div>'
+            '<div class="hero-copy">从合同上传到风险分级、人工复核和报告归档，在一个工作台内闭环完成。</div>'
+            '<div class="hero-flow"><span>合同解析</span><i>→</i><span>智能审查</span><i>→</i><span>法务复核</span><i>→</i><span>报告归档</span></div></div>',
+            unsafe_allow_html=True,
+        )
+    with hero_action:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="quick-card-marker"></div><div class="quick-kicker">QUICK START</div>'
+                '<div class="quick-title">发起新的合同审查</div>'
+                '<div class="quick-copy">上传企业合同，或使用脱敏示例体验完整风险审查闭环。</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("＋ 新建合同审查", type="primary", width="stretch", key="dashboard_new"):
+                go("review")
+                st.rerun()
+            st.caption("预计用时 2 分钟 · 全程保留审计记录")
     section("运营概览", "基于本地任务记录" if live else "数据仅用于界面演示", demo=not live)
     metric_cards([
         ("本周审查", str(len(tasks) if live else 18), "本地任务记录" if live else "较上周 +12%"),
@@ -157,19 +169,28 @@ def dashboard_page(service: AnalysisService) -> None:
 def review_page(service: AnalysisService) -> None:
     st.markdown('<div class="review-page-marker"></div>', unsafe_allow_html=True)
     page_header("新建合同审查", "用三步完成审查配置", "选择合同来源与审查方式，确认后启动智能风险识别。", service.settings.demo_mode)
+    workflow_steps(1)
     st.session_state.setdefault("source_mode", None)
     st.session_state.setdefault("sample_kind", "high")
     st.session_state.setdefault("review_mode", "full")
     step_header(1, "选择合同来源")
     upload_col, demo_col = st.columns(2, gap="large")
     with upload_col:
-        choice_copy("上传合同", "支持 PDF / DOCX / TXT，上传企业合同进行智能审查。")
-        if st.button("选择上传合同", type="primary" if st.session_state.source_mode == "upload" else "secondary", width="stretch"):
-            st.session_state.source_mode = "upload"; st.rerun()
+        with st.container(border=True):
+            selected = st.session_state.source_mode == "upload"
+            st.markdown(f'<div class="choice-card-marker {"selected" if selected else ""}"></div><div class="choice-icon">↑</div>', unsafe_allow_html=True)
+            choice_copy("上传合同", "支持 PDF / DOCX / TXT，上传企业合同进行智能审查。")
+            st.caption("适合真实合同 · 文件仅在本地处理")
+            if st.button("已选择上传合同" if selected else "选择上传合同", type="primary" if selected else "secondary", width="stretch"):
+                st.session_state.source_mode = "upload"; st.rerun()
     with demo_col:
-        choice_copy("体验示例", "使用脱敏示例合同快速体验完整审查流程。")
-        if st.button("选择体验示例", type="primary" if st.session_state.source_mode == "demo" else "secondary", width="stretch"):
-            st.session_state.source_mode = "demo"; st.rerun()
+        with st.container(border=True):
+            selected = st.session_state.source_mode == "demo"
+            st.markdown(f'<div class="choice-card-marker {"selected" if selected else ""}"></div><div class="choice-icon">◇</div>', unsafe_allow_html=True)
+            choice_copy("体验示例", "使用脱敏示例合同快速体验完整审查流程。")
+            st.caption("无需上传 · 约 30 秒完成")
+            if st.button("已选择体验示例" if selected else "选择体验示例", type="primary" if selected else "secondary", width="stretch"):
+                st.session_state.source_mode = "demo"; st.rerun()
     uploaded = None
     if st.session_state.source_mode == "upload":
         st.markdown('<div class="selection-note">已选择“上传合同”。示例合同选择已隐藏。</div>', unsafe_allow_html=True)
@@ -188,13 +209,21 @@ def review_page(service: AnalysisService) -> None:
     step_header(2, "选择审查方式")
     full_col, special_col = st.columns(2, gap="large")
     with full_col:
-        choice_copy("智能全面审查", "系统自动识别合同主要风险与审查维度。")
-        if st.button("智能全面审查", type="primary" if st.session_state.review_mode == "full" else "secondary", width="stretch"):
-            st.session_state.review_mode = "full"; st.rerun()
+        with st.container(border=True):
+            selected = st.session_state.review_mode == "full"
+            st.markdown(f'<div class="choice-card-marker {"selected" if selected else ""}"></div><div class="choice-icon">✦</div>', unsafe_allow_html=True)
+            choice_copy("智能全面审查", "自动识别付款、责任、解除、续期、知识产权等主要风险。")
+            st.caption("推荐 · 自动匹配审查维度")
+            if st.button("已选择智能全面审查" if selected else "选择智能全面审查", type="primary" if selected else "secondary", width="stretch"):
+                st.session_state.review_mode = "full"; st.rerun()
     with special_col:
-        choice_copy("专项审查", "针对指定法律风险进行专项分析。")
-        if st.button("专项审查", type="primary" if st.session_state.review_mode == "special" else "secondary", width="stretch"):
-            st.session_state.review_mode = "special"; st.rerun()
+        with st.container(border=True):
+            selected = st.session_state.review_mode == "special"
+            st.markdown(f'<div class="choice-card-marker {"selected" if selected else ""}"></div><div class="choice-icon">◎</div>', unsafe_allow_html=True)
+            choice_copy("专项审查", "聚焦指定法律风险，输出更有针对性的风险判断。")
+            st.caption("适合重点条款与特定议题")
+            if st.button("已选择专项审查" if selected else "选择专项审查", type="primary" if selected else "secondary", width="stretch"):
+                st.session_state.review_mode = "special"; st.rerun()
     selected_dimensions: list[str] = []
     if st.session_state.review_mode == "special":
         selected_dimension = st.selectbox(
@@ -245,7 +274,12 @@ def render_result_hero(task: TaskRecord) -> None:
     manual = sum(not item.evidence_sufficient or item.severity.value == "high" for item in risk.findings)
     values = [("综合风险", RISK_LABELS[risk.risk_level.value]), ("风险发现数量", str(len(risk.findings))), ("建议人工复核数量", str(manual)), ("置信度", f"{risk.confidence:.0%}"), ("审查领域", task_dimension(task))]
     metrics = "".join(f'<div class="result-metric"><span>{esc(k)}</span><strong>{esc(v)}</strong></div>' for k, v in values)
-    st.markdown(f"<div class='result-hero'><div class='result-kicker'>REVIEW COMPLETE</div><div class='result-title'>审查完成</div><div class='result-summary'>{esc(risk.summary)}</div><div class='result-metrics'>{metrics}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='result-hero'><div class='result-head'><div><div class='result-kicker'>EXECUTIVE SUMMARY</div>"
+        f"<div class='result-title'>审查执行摘要</div></div><div class='result-complete'>✓ REVIEW COMPLETE</div></div>"
+        f"<div class='result-summary'>{esc(risk.summary)}</div><div class='result-metrics'>{metrics}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_finding(finding, index: int) -> None:
@@ -357,29 +391,29 @@ def human_review_page(service: AnalysisService) -> None:
     ai_col, human_col = st.columns(2, gap="large")
     modifications: dict[str, dict[str, str]] = {}
     with ai_col:
-        st.markdown('<div class="panel review-ai"><div class="column-title">AI 原始判断</div>', unsafe_allow_html=True)
-        if task.risk:
-            st.markdown(f"风险等级　{risk_html(task.risk.risk_level.value)}", unsafe_allow_html=True)
-            for index, finding in enumerate(task.risk.findings, 1):
-                basis = finding.legal_basis[0] if finding.legal_basis else None
-                st.markdown(f"**{index:02d} · {finding.issue}**"); st.caption(f"合同证据：{finding.contract_evidence}")
-                st.write(f"AI 建议：{finding.recommendation}"); st.write(f"法律依据：{basis.title + ' · ' + basis.article_no if basis else '依据不足'}")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<div class="review-panel-marker ai"></div><div class="review-panel-kicker">AI ANALYSIS</div><div class="column-title">AI 原始判断</div>', unsafe_allow_html=True)
+            if task.risk:
+                st.markdown(f"风险等级　{risk_html(task.risk.risk_level.value)}", unsafe_allow_html=True)
+                for index, finding in enumerate(task.risk.findings, 1):
+                    basis = finding.legal_basis[0] if finding.legal_basis else None
+                    st.markdown(f"**{index:02d} · {finding.issue}**"); st.caption(f"合同证据：{finding.contract_evidence}")
+                    st.write(f"AI 建议：{finding.recommendation}"); st.write(f"法律依据：{basis.title + ' · ' + basis.article_no if basis else '依据不足'}")
     with human_col:
-        st.markdown('<div class="panel review-human"><div class="column-title">法务复核</div>', unsafe_allow_html=True)
-        for finding in (task.risk.findings if task.risk else []):
-            severity = st.selectbox(f"最终风险等级 · {finding.clause_id}", [i.value for i in Severity], index=[i.value for i in Severity].index(finding.severity.value), format_func=lambda value: RISK_LABELS[value], key=f"review_severity_{task.task_id}_{finding.clause_id}")
-            recommendation = st.text_area("修改建议", value=finding.recommendation, key=f"review_rec_{task.task_id}_{finding.clause_id}")
-            modifications[finding.clause_id] = {"issue": finding.issue, "recommendation": recommendation, "severity": severity}
-        decision = st.radio("最终决策", [i.value for i in ReviewDecision], format_func=lambda value: {"approve": "通过", "request_changes": "要求修改", "reject": "不通过"}[value], horizontal=True, key=f"decision_{task.task_id}")
-        comment = st.text_area("复核意见", placeholder="记录判断依据、修改要求或后续处理意见。", key=f"comment_{task.task_id}")
-        if st.button("保存复核结果", type="primary", width="stretch", key=f"save_{task.task_id}"):
-            try:
-                service.submit_review(task.task_id, ReviewDecision(decision), comment=comment, modifications=modifications, reviewer="demo-reviewer")
-                st.session_state.pop("review_task_id", None); st.toast("复核结果与审计记录已保存。"); st.rerun()
-            except Exception as exc:  # noqa: BLE001
-                st.error(str(exc))
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<div class="review-panel-marker human"></div><div class="review-panel-kicker">LEGAL DECISION</div><div class="column-title">法务复核</div>', unsafe_allow_html=True)
+            for finding in (task.risk.findings if task.risk else []):
+                severity = st.selectbox(f"最终风险等级 · {finding.clause_id}", [i.value for i in Severity], index=[i.value for i in Severity].index(finding.severity.value), format_func=lambda value: RISK_LABELS[value], key=f"review_severity_{task.task_id}_{finding.clause_id}")
+                recommendation = st.text_area("修改建议", value=finding.recommendation, key=f"review_rec_{task.task_id}_{finding.clause_id}")
+                modifications[finding.clause_id] = {"issue": finding.issue, "recommendation": recommendation, "severity": severity}
+            decision = st.radio("最终决策", [i.value for i in ReviewDecision], format_func=lambda value: {"approve": "通过", "request_changes": "要求修改", "reject": "不通过"}[value], horizontal=True, key=f"decision_{task.task_id}")
+            comment = st.text_area("复核意见", placeholder="记录判断依据、修改要求或后续处理意见。", key=f"comment_{task.task_id}")
+            if st.button("保存复核结果", type="primary", width="stretch", key=f"save_{task.task_id}"):
+                try:
+                    service.submit_review(task.task_id, ReviewDecision(decision), comment=comment, modifications=modifications, reviewer="demo-reviewer")
+                    st.session_state.pop("review_task_id", None); st.toast("复核结果与审计记录已保存。"); st.rerun()
+                except Exception as exc:  # noqa: BLE001
+                    st.error(str(exc))
     audit_trail(task)
 
 

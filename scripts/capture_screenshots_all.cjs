@@ -1,4 +1,4 @@
-﻿/* Portfolio screenshot capture script (Playwright-core + local Chrome). */
+/* Portfolio screenshot capture script (Playwright-core + local Chrome). */
 const path = require("path");
 const fs = require("fs");
 const { chromium } = require("playwright-core");
