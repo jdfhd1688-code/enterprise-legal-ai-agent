@@ -1,115 +1,82 @@
-# 第二阶段品牌交互验收报告
+# 四阶段品牌审查体验验收报告
 
 验收日期：2026-09-09  
-基线：`55200b1ec8301881b88c0e820fd5f3198a664bae`
+基线：`460528f8704b6a1e58d5dd709530b4add3601a0f`
 
-## 1. 獬豸视觉
-
-**PASS**
-
-使用内联 SVG 构造抽象獬豸轮廓与独角识别点，没有引入卡通或复杂真人素材。接卷阶段由淡入和短距离位移表达。
-
-## 2. 皋陶视觉
+## 1. 最终视觉资产
 
 **PASS**
 
-使用案台、人物线性侧影与朱笔构成克制的审契形象；没有采用历史人物肖像或古装页游视觉。
+用户提供的 `stage1.png` 至 `stage4.png` 已按原始 PNG 文件接入 `app/static/review_stages/`。未重新生成、改绘、裁切或替换为 SVG、emoji、占位图。Streamlit 静态资源实测返回 HTTP 200 和 `image/png`。
 
-## 3. 卷宗递送
-
-**PASS**
-
-卷宗从獬豸一侧沿细虚线路径平稳移动至皋陶案台。解析、规划、检索、分析和完成阶段具有不同视觉状态。
-
-## 4. Workflow Stage 映射
+## 2. 真实 Workflow 映射
 
 **PASS**
 
-UI 阶段由实际函数执行位置发布，不使用虚假百分比：
+视觉由实际函数执行位置发布，不使用定时轮播、伪造百分比或写死业务结果：
 
-| 用户阶段 | 实际工作流位置 |
-| --- | --- |
-| received | 文件校验、任务创建与上传文件落盘完成 |
-| parsing | `DocumentParserSkill.parse` 执行前 |
-| planning | `ReviewDimensionPlanner.plan` 执行前 |
-| retrieving | `RetrievalSkill.retrieve` 执行前 |
-| analyzing | `RiskAnalysisSkill.analyze` 执行前 |
-| validating | `SchemaGuard.validate` 执行前 |
-| reporting | 仅在真实报告分支调用 `ReportGenerator` 前 |
-| completed | 路由及本次工作流执行结束 |
+| 视觉阶段 | 真实状态 | 页面语义 |
+| --- | --- | --- |
+| Stage 1 | `received`、`parsing` | 合同接收与解析 |
+| Stage 2 | `planning`、`retrieving` | 审查规划与法规检索 |
+| Stage 3 | `analyzing`、`validating` | 风险分析与结果校验 |
+| Stage 4 | `reporting`、`completed` | 报告生成与审查完成 |
 
-高风险或证据不足分支不会虚假发布 `reporting`，而是完成结果校验后进入人工复核。
+细粒度 timeline 保留 `pending`、`active`、`completed` 三种状态。
 
-## 5. 审查完成跳转
+## 3. Human Review 分支
 
 **PASS**
 
-低风险示例完成“合同已接收 → 解析 → 规划 → 检索 → 分析 → 校验 → 报告 → 完成”后，自动进入第一阶段现代 SaaS Executive Summary 结果页。
+高风险、低置信度、证据不足或法规依据不足任务发布 `review_required`，映射至 Stage 3。该分支不会发布 `reporting` 或 `completed`，也不会预加载 Stage 4 图片；页面随后进入现有法务复核队列，保留 AI 原始判断、法务决策与审计轨迹。
 
-## 6. Reduced Motion
-
-**PASS**
-
-已添加 `@media (prefers-reduced-motion: reduce)`，关闭位移、循环执笔和脉冲动画，保留静态阶段状态。
-
-## 7. Error State
+## 4. 产品页面与结果体验
 
 **PASS**
 
-失败页显示“审查未完成”、重新开始审查、返回工作台和默认折叠的技术详情。普通页面不显示 Python traceback。
+- 工作台、五项导航和三步新建审查保持可用。
+- 审查执行页以四阶段主视觉、当前状态、卷宗名称和真实 timeline 组成。
+- Executive Summary 使用真实风险等级、发现数量、人工复核数量、置信度和审查领域。
+- 独立风险卡片展示合同证据、风险说明、法律依据、AI 建议、证据充分性和复核建议。
+- 技术处理详情默认折叠。
+- 报告中心、审查记录和 Human Review 保持独立页面。
 
-## 8. 第一阶段回归
+## 5. 动画、可访问性与响应式
 
 **PASS**
 
-- 工作台与左侧五项导航保留。
-- 三步新建审查、上传合同、体验示例、全面审查和专项审查保留。
-- Executive Summary、Finding Cards、报告中心和审查记录保留。
-- 高风险浏览器流程已验证：结果页显示“建议人工复核”，并可进入 `LEGAL DECISION` Human Review 页面。
-- 技术详情和 DEMO MODE 保留。
+- 图片使用原始比例，`object-fit: contain`，无拉伸。
+- 仅使用克制的淡入与轻微缩放；`prefers-reduced-motion` 下关闭动画。
+- 每张图片具有阶段语义 `alt` 文本；状态同时由文案与符号表达，不只依赖颜色。
+- Playwright 实测 1440、1024、768、390px：图片比例误差小于阈值且无页面横向溢出。
 
-## 9. 自动化测试
+## 6. 自动化测试
 
-- Total: 24
-- Passed: 24
-- Failed: 0
+**PASS — 26 / 26**
 
-执行命令：
+执行：`python -m unittest discover -s tests -v`
 
-```text
-python -m unittest discover -s tests -v
-```
+新增覆盖：四阶段映射、PNG 文件存在、低风险完整阶段序列、高风险 `Human Review != Stage 4`。
 
-## 10. 修改文件
+## 7. 浏览器验收与截图
 
-- `app/frontend.py`
-- `app/styles.py`
-- `app/agent/graph.py`
-- `app/services/analysis_service.py`
+**PASS**
 
-## 11. 新增文件
+真实浏览器完成：工作台 → 新建审查 → 低风险完整工作流 → Stage 4 → 风险结果 → 报告中心；另完成高风险工作流 → Stage 3 `review_required` → Human Review。
 
-- `app/review_experience.py`
-- `tests/test_stage2_experience.py`
-- `scripts/capture_stage2_review.cjs`
-- `docs/UI_STAGE2_ACCEPTANCE_REPORT.md`
+- `docs/images/stage2_review/00_dashboard.png`
+- `docs/images/stage2_review/00_new_review.png`
 - `docs/images/stage2_review/01_xiezhi_receive.png`
-- `docs/images/stage2_review/02_xiezhi_delivery.png`
-- `docs/images/stage2_review/03_gaotao_review.png`
 - `docs/images/stage2_review/04_legal_retrieval.png`
 - `docs/images/stage2_review/05_risk_analysis.png`
 - `docs/images/stage2_review/06_review_completed.png`
 - `docs/images/stage2_review/07_result_transition.png`
+- `docs/images/stage2_review/08_report_center.png`
+- `docs/images/stage2_review/09_risk_results.png`
+- `docs/images/stage2_review/10_human_review.png`
 
-## 12. 当前限制
-
-- Streamlit 后端仍为同步执行；过程页使用 `st.fragment` 先完成真实文件接收，再在后续片段运行中由同步工作流回调更新状态。
-- 很快完成的本地 DEMO 节点使用 550–800ms 的展示节奏，阶段来源仍是实际函数位置，不表示计算百分比。
-- 高风险任务在人工复核完成前不会生成正式报告，因此该分支不会显示虚假的“正在生成报告”。
-- 当前 Playwright 环境缺少录制视频所需的 FFmpeg，未生成演示视频；7 张浏览器截图均已真实生成。
-
-## 13. 第二阶段结论
+## 8. 结论
 
 **PASS**
 
-“獬豸递卷 · 皋陶审契”品牌审查过程已完成，并与真实工作流阶段连接；第一阶段现代 SaaS 结果与人工复核体系未被替换或破坏。
+四张最终视觉资产已成为真实合同审查工作流的状态呈现层；低风险报告分支可进入 Stage 4，高风险人工复核分支严格停留在 Stage 3。核心风险分析、RAG、路由、报告和审计规则未被改写。

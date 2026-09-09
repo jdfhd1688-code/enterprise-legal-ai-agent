@@ -118,16 +118,17 @@ class AgentGraph:
                 task.status = TaskStatus.awaiting_review
                 self._event(task, "human_review_started", "任务已进入人工复核队列。")
                 self._event(task, "workflow_router", f"路由到人工复核：{routed_risk.review_reason or '规则要求复核'}。")
+                self._notify(on_stage, "review_required", "AI 初审完成，任务需要人工复核。")
             elif route == WorkflowRoute.report:
                 task.status = TaskStatus.report_ready
                 self._notify(on_stage, "reporting", "正在生成结构化审查报告。")
                 task.report_markdown = self._build_report(task)
                 self._event(task, "report_generation", "已自动生成结构化风险报告。")
+                self._notify(on_stage, "completed", "审查与报告生成完成。")
             else:
                 task.status = TaskStatus.failed
                 self._event(task, "workflow_router", "工作流未识别路由，任务失败。")
             task.touch()
-            self._notify(on_stage, "completed", "审查流程执行完成。")
             return task
         except (DocumentParserError, RiskAnalysisError, ValueError) as exc:
             task.status = TaskStatus.failed

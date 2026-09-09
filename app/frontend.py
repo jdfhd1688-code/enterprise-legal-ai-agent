@@ -334,7 +334,7 @@ def review_process_runner(service: AnalysisService, request: dict) -> None:
             f'<div class="process-current"><span></span><div><small>当前处理</small><strong>{esc(message)}</strong></div></div>',
             unsafe_allow_html=True,
         )
-        time.sleep(0.8 if stage == "completed" else 0.55)
+        time.sleep(0.8 if stage in {"completed", "review_required"} else 0.55)
 
     try:
         task = service.execute_task(
@@ -373,10 +373,13 @@ def render_result_hero(task: TaskRecord) -> None:
 def render_finding(finding, index: int) -> None:
     basis = finding.legal_basis[0] if finding.legal_basis else None
     basis_text = f"{basis.title} · {basis.article_no} · {basis.source}" if basis else "未检索到可验证的法律依据"
+    needs_review = finding.severity.value == "high" or not finding.evidence_sufficient
+    evidence_status = badge("证据充分" if finding.evidence_sufficient else "证据不足", "low" if finding.evidence_sufficient else "high")
+    review_status = badge("建议人工复核" if needs_review else "AI 初审通过", "high" if needs_review else "neutral")
     insufficient = "<div class='insufficient'>依据不足，需要人工复核</div>" if not finding.evidence_sufficient else ""
     st.markdown(
         f"<div class='finding-card {esc(finding.severity.value)}'><div class='finding-top'><div><div class='finding-index'>{index:02d}</div><div class='finding-title'>{esc(finding.issue)}</div></div>{risk_html(finding.severity.value)}</div>"
-        f"<div>{badge(finding.risk_type, 'neutral')}</div>{insufficient}<div class='finding-grid'>"
+        f"<div>{badge(finding.risk_type, 'neutral')} {evidence_status} {review_status}</div>{insufficient}<div class='finding-grid'>"
         f"<div class='detail-block'><div class='detail-label'>合同证据 · {esc(finding.evidence_section or finding.clause_id)}</div><div class='detail-text'>{esc(finding.contract_evidence)}</div></div>"
         f"<div class='detail-block'><div class='detail-label'>风险说明</div><div class='detail-text'>{esc(finding.issue)}</div></div>"
         f"<div class='detail-block'><div class='detail-label'>法律依据</div><div class='detail-text'>{esc(basis_text)}</div></div>"

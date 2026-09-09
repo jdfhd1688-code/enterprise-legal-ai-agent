@@ -17,6 +17,24 @@ Enterprise Legal AI Agent 是一个面向企业法务场景的 AI 合同审查�
 ![Report Center](docs/images/report_center.png)
 ![Audit Log](docs/images/audit_log.png)
 
+## Cinematic Review Experience
+
+审查执行页使用四张已确认的品牌视觉资产，并由真实工作流状态驱动，而不是定时轮播：
+
+| 视觉阶段 | 真实工作流状态 | 产品含义 |
+| --- | --- | --- |
+| Stage 1 | `received`、`parsing` | 合同接收与结构解析 |
+| Stage 2 | `planning`、`retrieving` | 审查规划与法规检索 |
+| Stage 3 | `analyzing`、`validating` | 风险分析与结果校验 |
+| Stage 4 | `reporting`、`completed` | 报告生成与审查完成 |
+
+高风险、低置信度或证据不足任务会进入 `review_required`，停留在 Stage 3 并进入 Human-in-the-Loop 法务复核；只有真实报告分支才展示 Stage 4。细粒度 timeline、RAG 证据、风险路由和审计事件均保留，技术详情默认折叠。
+
+![Stage 1](docs/images/stage2_review/01_xiezhi_receive.png)
+![Stage 2](docs/images/stage2_review/04_legal_retrieval.png)
+![Stage 3](docs/images/stage2_review/05_risk_analysis.png)
+![Stage 4](docs/images/stage2_review/06_review_completed.png)
+
 ## 项目背景
 
 企业合同审查存在高重复、高风险、证据链不透明的问题。纯聊天机器人虽然能生成解释，但不能稳定保证依据来源、输出结构、风险分流和责任边界。本项目将合同审查拆解成可运行、可测试、可解释的 AI Solution：用 RAG 提供证据，用 Pydantic 约束输出，用 Workflow 控制风险路由，用 Human Review 处理高风险和证据不足任务。
@@ -65,6 +83,7 @@ flowchart TD
 enterprise-legal-ai/
 ├─ app/
 │  ├─ frontend.py                 # Streamlit Web UI
+│  ├─ review_experience.py        # 工作流到四阶段视觉的映射与渲染
 │  ├─ api.py                      # FastAPI service boundary
 │  ├─ config.py                   # Settings / env
 │  ├─ agent/                      # Agent state graph + review planner
@@ -78,6 +97,7 @@ enterprise-legal-ai/
 │  ├─ contracts/                  # sample contracts
 │  └─ legal_kb/                   # DEMO/SAMPLE legal knowledge base
 ├─ docs/                          # project documentation and screenshots
+├─ app/static/review_stages/      # 四张最终审查阶段视觉资产
 ├─ scripts/                       # utility scripts and real LLM test
 ├─ tests/                         # unittest coverage
 ├─ README.md

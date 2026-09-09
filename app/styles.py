@@ -47,5 +47,24 @@ div.stButton>button,div.stDownloadButton>button{border-radius:9px;min-height:2.5
 @media(prefers-reduced-motion:reduce){.review-process *{animation:none!important;transition:none!important}.process-step.active span{opacity:1}}
 @keyframes seal-arrive{from{opacity:0;transform:scale(1.35)}to{opacity:.82;transform:scale(1)}}
 @media(max-width:900px){.process-scene{min-height:auto}.process-steps,.process-progress{grid-template-columns:repeat(3,1fr)}.process-heading h1{font-size:1.65rem}.process-file{display:none}}
+
+/* Four approved cinematic assets — workflow-driven, never a timer carousel. */
+.block-container:has(.process-page-marker){max-width:1420px;padding-top:1.2rem;background:linear-gradient(180deg,#f3eee6 0,#f4f6fa 88%)}
+.review-process{--cinema-red:#9a302c;--cinema-green:#42685b;max-width:1120px;margin:0 auto;color:#282724}
+.review-process .process-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:2rem;text-align:left;padding:.3rem .15rem 1rem}
+.review-process .process-heading>div{max-width:560px}.review-process .process-kicker{color:#9a302c;font-size:.61rem;letter-spacing:.18em;font-weight:820}
+.review-process .process-heading h1{font-family:"Songti SC","STSong","Noto Serif SC",serif;font-size:2rem;line-height:1.1;letter-spacing:.04em;color:#201f1c;margin:.35rem 0 .22rem}
+.process-subtitle{font-family:"Songti SC","STSong",serif;color:#574f46;font-size:.92rem;letter-spacing:.06em}.review-process .process-heading p{max-width:430px;color:#746e65;font-size:.76rem;line-height:1.65;margin:0 0 .1rem;text-align:right}
+.process-visual{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:19px;background:#15120f;border:1px solid rgba(83,65,45,.28);box-shadow:0 22px 52px rgba(38,29,20,.2)}
+.process-visual img{display:block;width:100%;height:100%;object-fit:contain;object-position:center;animation:cinematic-reveal .55s ease both}
+.process-visual-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,5,5,.04) 55%,rgba(4,5,5,.2));pointer-events:none}
+.process-live-state{position:absolute;right:18px;bottom:16px;display:flex;align-items:center;gap:.42rem;background:rgba(15,17,16,.72);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px);border-radius:999px;padding:.38rem .62rem;color:#eee8dc;font-size:.57rem;font-weight:780;letter-spacing:.1em}.process-live-state span{width:6px;height:6px;border-radius:50%;background:#77b494}
+.review-process .process-status{padding:.85rem .18rem .35rem}.review-process .process-stage-copy{display:block!important}.review-process .process-progress{margin:.75rem 0 .4rem}.review-process .process-footnote{color:#9b9388;padding-bottom:.3rem}
+.process-review-branch{display:flex;align-items:center;justify-content:space-between;gap:1rem;background:#fff3f0;border:1px solid #e8c7c1;border-left:4px solid var(--cinema-red);border-radius:10px;padding:.65rem .8rem;margin:.4rem 0}.process-review-branch strong{color:#8f2e29;font-size:.61rem;letter-spacing:.11em}.process-review-branch span{color:#765f5b;font-size:.68rem}
+.stage-review_required .status-mark span{background:var(--cinema-red)}.stage-completed .status-mark span,.stage-reporting .status-mark span{background:var(--cinema-green)}
+@keyframes cinematic-reveal{from{opacity:.35;transform:scale(1.012)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.process-visual img,.review-process .process-step span{animation:none!important;transition:none!important}}
+@media(max-width:1024px){.review-process .process-heading{align-items:flex-start}.review-process .process-heading p{max-width:360px}.process-visual{border-radius:15px}.review-process .process-progress{gap:.25rem}}
+@media(max-width:760px){.block-container:has(.process-page-marker){padding-left:.75rem;padding-right:.75rem}.review-process .process-heading{display:block}.review-process .process-heading h1{font-size:1.55rem}.review-process .process-heading p{text-align:left;margin-top:.6rem}.process-visual{border-radius:12px}.process-live-state{right:9px;bottom:9px}.review-process .process-progress{display:flex;overflow-x:auto;padding-bottom:.35rem;scrollbar-width:thin}.review-process .process-step{flex:0 0 98px}.process-review-branch{display:block}.process-review-branch span{display:block;margin-top:.25rem}}
 </style>
 """
