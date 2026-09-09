@@ -7,6 +7,8 @@ skills/tools, while WorkflowRouter owns fixed business rules.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.config import Settings, get_settings
 from app.schemas.kb import RetrievalResult
 from app.schemas.task import AuditEvent, StageEvent, TaskRecord
@@ -37,13 +39,17 @@ class AgentGraph:
         self.router = WorkflowRouter(self.settings)
         self.report_generator = ReportGenerator()
 
-    def execute(self, task: TaskRecord, content: bytes) -> TaskRecord:
+    def execute(
+        self,
+        task: TaskRecord,
+        content: bytes,
+        on_stage: Callable[[str, str], None] | None = None,
+    ) -> TaskRecord:
         preferred = task.review_dimension if task.review_dimension != "general_contract" else None
-        plan = self.planner.plan(task.question, preferred_dimension=preferred)
-        task.review_dimension = plan.dimension
         self._event(task, "START", "Agent 已接收任务，开始解析合同。")
         try:
             task.status = TaskStatus.parsing
+            self._notify(on_stage, "parsing", "正在解析合同结构与条款。")
             parsed = self.parser.parse(task.original_filename, content)
             task.parsed_document = parsed
             task.touch()
@@ -59,7 +65,12 @@ class AgentGraph:
             task.touch()
             self._event(task, "chunk", f"文本切分完成：共 {len(chunks)} 个带来源片段。")
 
+            self._notify(on_stage, "planning", "正在识别本次合同的审查维度。")
+            plan = self.planner.plan(task.question, preferred_dimension=preferred)
+            task.review_dimension = plan.dimension
+
             task.status = TaskStatus.retrieving
+            self._notify(on_stage, "retrieving", "正在检索与合同条款相关的法律依据。")
             retrieval = self.retrieval_skill.retrieve(
                 parsed,
                 chunks,
@@ -74,6 +85,7 @@ class AgentGraph:
                 self._event(task, "retrieve", f"检索到 {len(retrieval.hits)} 条 DEMO/SAMPLE 知识库证据。")
 
             task.status = TaskStatus.analyzing
+            self._notify(on_stage, "analyzing", "正在结合合同证据与法律依据分析风险。")
             risk = self.risk_skill.analyze(
                 task_id=task.task_id,
                 question=task.question,
@@ -88,6 +100,7 @@ class AgentGraph:
             self._event(task, "analyze", f"风险分析完成：{risk.risk_level.value.upper()} / 置信度 {risk.confidence:.2f}。")
 
             task.status = TaskStatus.validating
+            self._notify(on_stage, "validating", "正在校验风险结果与证据状态。")
             validated = self.schema_guard.validate(risk, task.task_id)
             task.risk = validated
             task.original_ai_result = validated.model_copy(deep=True)
@@ -107,25 +120,39 @@ class AgentGraph:
                 self._event(task, "workflow_router", f"路由到人工复核：{routed_risk.review_reason or '规则要求复核'}。")
             elif route == WorkflowRoute.report:
                 task.status = TaskStatus.report_ready
+                self._notify(on_stage, "reporting", "正在生成结构化审查报告。")
                 task.report_markdown = self._build_report(task)
                 self._event(task, "report_generation", "已自动生成结构化风险报告。")
             else:
                 task.status = TaskStatus.failed
                 self._event(task, "workflow_router", "工作流未识别路由，任务失败。")
             task.touch()
+            self._notify(on_stage, "completed", "审查流程执行完成。")
             return task
         except (DocumentParserError, RiskAnalysisError, ValueError) as exc:
             task.status = TaskStatus.failed
             task.error = str(exc)
             task.touch()
             self._event(task, "failed", str(exc))
+            self._notify(on_stage, "failed", "审查流程未完成。")
             return task
         except Exception as exc:  # noqa: BLE001 - no silent failure in the demo
             task.status = TaskStatus.failed
             task.error = f"分析流程发生未预期错误：{exc}"
             task.touch()
             self._event(task, "failed", task.error)
+            self._notify(on_stage, "failed", "审查流程未完成。")
             return task
+
+    @staticmethod
+    def _notify(callback: Callable[[str, str], None] | None, stage: str, message: str) -> None:
+        """Publish presentation state without letting UI failures affect analysis."""
+        if callback is None:
+            return
+        try:
+            callback(stage, message)
+        except Exception:  # noqa: BLE001 - presentation hooks must never break the graph
+            return
 
     def _build_report(self, task: TaskRecord) -> str:
         evidence_notes = [

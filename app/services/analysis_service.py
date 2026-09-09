@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -55,7 +56,21 @@ class AnalysisService:
         data: bytes,
         question: str,
         review_dimension: str | None = None,
+        on_stage: Callable[[str, str], None] | None = None,
     ) -> TaskRecord:
+        task = self.prepare_task(filename, data, question, review_dimension)
+        if on_stage is not None:
+            on_stage("received", "合同文件已接收。")
+        return self.execute_task(task.task_id, data, on_stage=on_stage)
+
+    def prepare_task(
+        self,
+        filename: str,
+        data: bytes,
+        question: str,
+        review_dimension: str | None = None,
+    ) -> TaskRecord:
+        """Validate and persist a submitted task before the workflow starts."""
         self.validate_file(filename, data)
         if review_dimension is not None and review_dimension not in REVIEW_DIMENSIONS:
             raise InvalidFileError(f"未知审查维度：{review_dimension}")
@@ -74,7 +89,17 @@ class AnalysisService:
         self.store.save(task)
         upload_path = self.settings.upload_dir / f"{task_id}{Path(filename).suffix.lower()}"
         upload_path.write_bytes(data)
-        executed = self.graph.execute(task, data)
+        return task
+
+    def execute_task(
+        self,
+        task_id: str,
+        data: bytes,
+        on_stage: Callable[[str, str], None] | None = None,
+    ) -> TaskRecord:
+        """Execute a task that has already passed file intake."""
+        task = self.get_task(task_id)
+        executed = self.graph.execute(task, data, on_stage=on_stage)
         return self.store.save(executed)
 
     def get_task(self, task_id: str) -> TaskRecord:

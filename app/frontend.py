@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import streamlit as st
 
 from app.agent.review_planner import DIMENSION_LABELS, REVIEW_DIMENSIONS
 from app.schemas.risk import ReviewDecision, Severity
+from app.review_experience import render_review_experience
 from app.schemas.task import TaskRecord
 from app.services.analysis_service import AnalysisService
 from app.styles import APP_CSS
@@ -77,7 +79,8 @@ def render_sidebar(service: AnalysisService) -> None:
     page = st.session_state.get("page", "dashboard")
     with st.sidebar:
         st.markdown(
-            """<div class="sidebar-brand"><div class="sidebar-brand-row"><div class="sidebar-mark">EL</div>
+            """<div class="sidebar-brand"><div class="sidebar-brand-row"><div class="sidebar-mark" aria-label="獬豸品牌标记">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M11 31c2-9 9-14 18-13 7 1 12 5 14 12l-5 2-2 8H15zM18 19c1-8 5-13 12-14 6-1 10 2 12 7l-7 2-2 5M29 6l6-5-2 8"/></svg></div>
             <div><div class="sidebar-name">Enterprise Legal AI</div>
             <div class="sidebar-sub">企业法务智能工作台</div></div></div></div>
             <div class="nav-section-label">主工作区</div>""",
@@ -91,7 +94,7 @@ def render_sidebar(service: AnalysisService) -> None:
         st.markdown(
             f'<div class="sidebar-footer"><div class="sidebar-status"><span></span>{esc(mode)}</div>'
             '<div class="sidebar-footer-title">安全与合规提示</div><div>AI 辅助审查结果不构成正式法律意见。</div>'
-            '<div class="sidebar-version">STAGE 1 · PRODUCT UI</div></div>',
+            '<div class="sidebar-version">獬豸递卷 · 皋陶审契</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -253,18 +256,103 @@ def review_page(service: AnalysisService) -> None:
     source_ready = st.session_state.source_mode == "demo" or (st.session_state.source_mode == "upload" and uploaded is not None)
     method_ready = st.session_state.review_mode == "full" or bool(selected_dimensions)
     if st.button("开始智能审查", type="primary", width="stretch", disabled=not (source_ready and method_ready)):
+        if st.session_state.source_mode == "demo":
+            filename = f"sample_contract_{st.session_state.sample_kind}_risk.pdf"
+            data = (service.settings.contract_dir / filename).read_bytes()
+        else:
+            filename, data = uploaded.name, uploaded.getvalue()
+        st.session_state["review_request"] = {
+            "filename": filename,
+            "data": data,
+            "question": question,
+            "review_dimension": selected_dimensions[0] if selected_dimensions else None,
+        }
+        st.session_state.pop("process_error", None)
+        st.session_state.pop("process_task_id", None)
+        go("process")
+        st.rerun()
+
+
+def review_process_page(service: AnalysisService) -> None:
+    """Render the dedicated process route; a fragment advances the real workflow."""
+    request = st.session_state.get("review_request")
+    if not request:
+        go("review")
+        st.rerun()
+
+    st.markdown('<div class="process-page-marker"></div>', unsafe_allow_html=True)
+    review_process_runner(service, request)
+
+
+@st.fragment(run_every=0.8)
+def review_process_runner(service: AnalysisService, request: dict) -> None:
+    """Let intake paint once before synchronous workflow callbacks begin."""
+    stage_slot = st.empty()
+    error = st.session_state.get("process_error")
+    if error:
+        stage_slot.markdown(render_review_experience("failed", request["filename"]), unsafe_allow_html=True)
+        action_a, action_b = st.columns(2)
+        if action_a.button("重新开始审查", type="primary", width="stretch"):
+            st.session_state.pop("process_error", None)
+            st.session_state.pop("process_task_id", None)
+            st.rerun()
+        if action_b.button("返回工作台", width="stretch"):
+            st.session_state.pop("review_request", None)
+            st.session_state.pop("process_error", None)
+            st.session_state.pop("process_task_id", None)
+            go("dashboard")
+            st.rerun()
+        with st.expander("查看技术详情", expanded=False):
+            st.code(str(error))
+        return
+
+    status_slot = st.empty()
+
+    prepared_id = st.session_state.get("process_task_id")
+    if not prepared_id:
         try:
-            if st.session_state.source_mode == "demo":
-                filename = f"sample_contract_{st.session_state.sample_kind}_risk.pdf"
-                data = (service.settings.contract_dir / filename).read_bytes()
-            else:
-                filename, data = uploaded.name, uploaded.getvalue()
-            with st.spinner("正在解析合同、检索依据并生成结构化风险结果…"):
-                task = service.create_task(filename, data, question, review_dimension=selected_dimensions[0] if selected_dimensions else None)
-            st.session_state["last_task_id"] = task.task_id
-            go("result", task.task_id); st.rerun()
+            prepared = service.prepare_task(
+                request["filename"],
+                request["data"],
+                request["question"],
+                review_dimension=request["review_dimension"],
+            )
+            st.session_state["process_task_id"] = prepared.task_id
+            stage_slot.markdown(render_review_experience("received", request["filename"]), unsafe_allow_html=True)
+            status_slot.markdown(
+                '<div class="process-current"><span></span><div><small>当前处理</small><strong>合同文件已接收。</strong></div></div>',
+                unsafe_allow_html=True,
+            )
+            return
         except Exception as exc:  # noqa: BLE001
-            st.error(f"无法启动审查：{exc}")
+            st.session_state["process_error"] = str(exc)
+            st.rerun()
+
+    def update_stage(stage: str, message: str) -> None:
+        stage_slot.markdown(render_review_experience(stage, request["filename"]), unsafe_allow_html=True)
+        status_slot.markdown(
+            f'<div class="process-current"><span></span><div><small>当前处理</small><strong>{esc(message)}</strong></div></div>',
+            unsafe_allow_html=True,
+        )
+        time.sleep(0.8 if stage == "completed" else 0.55)
+
+    try:
+        task = service.execute_task(
+            st.session_state["process_task_id"],
+            request["data"],
+            on_stage=update_stage,
+        )
+        if task.error:
+            st.session_state["process_error"] = task.error
+            st.rerun()
+        st.session_state["last_task_id"] = task.task_id
+        st.session_state.pop("review_request", None)
+        st.session_state.pop("process_task_id", None)
+        go("result", task.task_id)
+        st.rerun()
+    except Exception as exc:  # noqa: BLE001
+        st.session_state["process_error"] = str(exc)
+        st.rerun()
 
 
 def render_result_hero(task: TaskRecord) -> None:
@@ -342,6 +430,12 @@ def result_page(service: AnalysisService) -> None:
     if not task.risk:
         st.warning("该任务尚未生成风险结果。"); return
     render_result_hero(task)
+    if task.status.value == "awaiting_review" or task.risk.requires_human_review:
+        st.markdown(
+            '<div class="manual-review-notice"><div><span>LEGAL REVIEW ADVISED</span>'
+            '<strong>建议人工复核</strong><p>该任务存在高风险、证据不足或置信度条件，已进入法务复核队列。</p></div></div>',
+            unsafe_allow_html=True,
+        )
     selected = st.radio("风险筛选", ["全部", "高风险", "中风险", "低风险"], horizontal=True, label_visibility="collapsed")
     level = {"高风险": "high", "中风险": "medium", "低风险": "low"}.get(selected)
     findings = [f for f in task.risk.findings if not level or f.severity.value == level]
@@ -467,7 +561,15 @@ def main() -> None:
     st.markdown(APP_CSS, unsafe_allow_html=True)
     service = get_service(); render_sidebar(service)
     page = st.session_state.get("page", "dashboard")
-    pages = {"dashboard": dashboard_page, "review": review_page, "human_review": human_review_page, "reports": reports_page, "history": history_page, "result": result_page}
+    pages = {
+        "dashboard": dashboard_page,
+        "review": review_page,
+        "process": review_process_page,
+        "human_review": human_review_page,
+        "reports": reports_page,
+        "history": history_page,
+        "result": result_page,
+    }
     if page not in pages:
         go("dashboard"); st.rerun()
     pages[page](service)
