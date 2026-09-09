@@ -21,6 +21,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 CONTRACT_DIR = DATA_DIR / "contracts"
 LEGAL_KB_DIR = DATA_DIR / "legal_kb"
+PLAYBOOK_DIR = DATA_DIR / "playbooks"
+EVAL_DIR = DATA_DIR / "eval"
 TASK_DIR = DATA_DIR / "tasks"
 UPLOAD_DIR = DATA_DIR / "uploads"
 
@@ -54,6 +56,8 @@ class Settings:
     data_dir: Path = DATA_DIR
     contract_dir: Path = CONTRACT_DIR
     legal_kb_dir: Path = LEGAL_KB_DIR
+    playbook_dir: Path = PLAYBOOK_DIR
+    eval_dir: Path = EVAL_DIR
     task_dir: Path = TASK_DIR
     upload_dir: Path = UPLOAD_DIR
 
@@ -75,7 +79,7 @@ class Settings:
     review_required_domains: tuple[str, ...] = field(default=("intellectual_property",))
 
     def ensure_dirs(self) -> None:
-        for directory in (self.task_dir, self.upload_dir, self.contract_dir):
+        for directory in (self.task_dir, self.upload_dir, self.contract_dir, self.playbook_dir, self.eval_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
     @property

@@ -18,7 +18,8 @@ from app.agent.review_planner import DIMENSION_DOMAIN, DIMENSION_LABELS
 from app.config import Settings, get_settings
 from app.schemas.document import DocumentChunk, ParsedDocument
 from app.schemas.kb import RetrievalResult
-from app.schemas.risk import Finding, LegalBasis, RiskAnalysis, RiskLevel, Severity
+from app.schemas.playbook import PlaybookResult
+from app.schemas.risk import EvidenceStatus, Finding, LegalBasis, RiskAnalysis, RiskLevel, Severity
 from app.tools.llm_client import LLMClientError, OpenAICompatibleClient
 
 
@@ -123,23 +124,26 @@ class RiskAnalysisSkill:
         chunks: list[DocumentChunk],
         retrieval: RetrievalResult,
         review_dimension: str = "general_contract",
+        playbook_result: PlaybookResult | None = None,
     ) -> RiskAnalysis:
         if self.settings.demo_mode:
-            return self._demo_analysis(
+            risk = self._demo_analysis(
                 task_id,
                 question,
                 chunks,
                 retrieval,
                 review_dimension,
             )
-        return self._llm_analysis(
+        else:
+            risk = self._llm_analysis(
             task_id,
             question,
             parsed_document,
             chunks,
             retrieval,
-            review_dimension,
-        )
+                review_dimension,
+            )
+        return self._apply_playbook(risk, playbook_result or PlaybookResult(), chunks, retrieval)
 
     def _demo_analysis(
         self,
@@ -173,6 +177,11 @@ class RiskAnalysisSkill:
                 evidence_page=chunk.page_no,
                 evidence_section=chunk.section,
                 evidence_sufficient=self._finding_evidence_ok(basis),
+                legal_evidence=basis,
+                reasoning=f"合同片段命中 {rule.risk_type} 风险规则，并关联当前检索证据。",
+                confidence=0.82,
+                evidence_status=EvidenceStatus.partial if basis else EvidenceStatus.insufficient,
+                requires_human_review=rule.severity == Severity.high or not basis,
             )
             findings.append(finding)
 
@@ -285,7 +294,7 @@ class RiskAnalysisSkill:
             chunk = hit.chunk
             basis.append(
                 LegalBasis(
-                    title=f"{chunk.title} {chunk.article_no}",
+                    title=chunk.title,
                     article_no=chunk.article_no,
                     source=chunk.source,
                     status=chunk.status,
@@ -297,9 +306,84 @@ class RiskAnalysisSkill:
                     source_type=chunk.source_type,
                     match_reason=hit.match_reason,
                     is_demo_sample=chunk.is_demo_sample,
+                    text=chunk.content,
+                    document_id=chunk.document_id,
                 )
             )
         return basis
+
+    def _apply_playbook(
+        self,
+        risk: RiskAnalysis,
+        playbook: PlaybookResult,
+        chunks: list[DocumentChunk],
+        retrieval: RetrievalResult,
+    ) -> RiskAnalysis:
+        by_clause = {finding.clause_id: finding for finding in risk.findings}
+        chunks_by_id = {chunk.chunk_id: chunk for chunk in chunks}
+        for deviation in playbook.deviations:
+            finding = by_clause.get(deviation.chunk_id)
+            if finding is None:
+                chunk = chunks_by_id.get(deviation.chunk_id)
+                if chunk is None:
+                    continue
+                basis = self._basis_from_hits(retrieval)
+                finding = Finding(
+                    clause_id=chunk.chunk_id,
+                    risk_type="playbook_deviation",
+                    severity=deviation.evidence.severity,
+                    issue=f"合同条款偏离企业 Playbook：{deviation.evidence.title}",
+                    contract_evidence=f"[{chunk.evidence_label}] {' '.join(chunk.text.split())[:300]}",
+                    legal_basis=basis,
+                    legal_evidence=basis,
+                    recommendation=deviation.recommendation,
+                    evidence_page=chunk.page_no,
+                    evidence_section=chunk.section,
+                    evidence_sufficient=bool(basis),
+                    reasoning="企业标准偏离与合同原文可直接对应；法律依据仅采用当前检索结果。",
+                    confidence=0.84,
+                )
+                risk.findings.append(finding)
+                by_clause[chunk.chunk_id] = finding
+            finding.playbook_evidence.append(deviation.evidence)
+            finding.playbook_deviation = deviation.evidence.deviation
+            if deviation.redline is not None:
+                finding.redline = deviation.redline
+            if deviation.recommendation:
+                finding.recommendation = deviation.recommendation
+            finding.requires_human_review = finding.requires_human_review or deviation.evidence.severity == Severity.high
+        risk.risk_level = self._level_from_findings(risk.findings)
+        risk.requires_human_review = risk.requires_human_review or any(item.requires_human_review for item in risk.findings)
+        risk.playbook_version = playbook.version
+        if playbook.deviations:
+            high_count = sum(item.severity == Severity.high for item in risk.findings)
+            risk.summary = (
+                f"基于合同证据、Legal RAG 与企业 Playbook，检出 {len(risk.findings)} 个风险项，"
+                f"其中高风险 {high_count} 项、Playbook 偏离 {len(playbook.deviations)} 项。"
+            )
+        return risk
+
+    @staticmethod
+    def _basis_from_hits(retrieval: RetrievalResult) -> list[LegalBasis]:
+        return [
+            LegalBasis(
+                title=hit.chunk.title,
+                article_no=hit.chunk.article_no,
+                source=hit.chunk.source,
+                status=hit.chunk.status,
+                jurisdiction=hit.chunk.jurisdiction,
+                effective_date=hit.chunk.effective_date,
+                expiry_date=hit.chunk.expiry_date,
+                source_url=hit.chunk.source_url,
+                domain=hit.chunk.domain,
+                source_type=hit.chunk.source_type,
+                match_reason=hit.match_reason,
+                is_demo_sample=hit.chunk.is_demo_sample,
+                text=hit.chunk.content,
+                document_id=hit.chunk.document_id,
+            )
+            for hit in retrieval.hits[:2]
+        ]
 
     def _llm_analysis(
         self,

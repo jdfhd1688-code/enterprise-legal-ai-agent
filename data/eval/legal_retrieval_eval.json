@@ -1,0 +1,223 @@
+{
+  "name": "DEMO/SAMPLE Legal Retrieval Evaluation",
+  "version": "demo-v1",
+  "source_type": "demo_sample",
+  "items": [
+    {
+      "id": "EVAL-01",
+      "query": "合同签署人没有授权怎么办",
+      "expected_law_title": "DEMO/SAMPLE 合同成立与履行审查参考",
+      "expected_article_no": "样例条款 02",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-02",
+      "query": "合同附件和主合同冲突按哪个执行",
+      "expected_law_title": "DEMO/SAMPLE 合同成立与履行审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-03",
+      "query": "不可抗力发生后如何通知和减损",
+      "expected_law_title": "DEMO/SAMPLE 合同成立与履行审查参考",
+      "expected_article_no": "样例条款 07",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-04",
+      "query": "违约金起算日比例和上限",
+      "expected_law_title": "DEMO/SAMPLE 违约责任审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-05",
+      "query": "合同无限责任和赔偿上限",
+      "expected_law_title": "DEMO/SAMPLE 违约责任审查参考",
+      "expected_article_no": "样例条款 04",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-06",
+      "query": "间接损失和预期利益是否赔偿",
+      "expected_law_title": "DEMO/SAMPLE 违约责任审查参考",
+      "expected_article_no": "样例条款 05",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-07",
+      "query": "发票后付款期限如何约定",
+      "expected_law_title": "DEMO/SAMPLE 付款与交付审查参考",
+      "expected_article_no": "样例条款 01",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-08",
+      "query": "交付后的验收标准和整改复验",
+      "expected_law_title": "DEMO/SAMPLE 付款与交付审查参考",
+      "expected_article_no": "样例条款 05",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-09",
+      "query": "货物风险什么时候转移",
+      "expected_law_title": "DEMO/SAMPLE 付款与交付审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "contract",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-10",
+      "query": "保密信息有哪些法定披露例外",
+      "expected_law_title": "DEMO/SAMPLE 保密义务与商业秘密审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "confidentiality",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-11",
+      "query": "合同终止后保密资料返还删除",
+      "expected_law_title": "DEMO/SAMPLE 保密义务与商业秘密审查参考",
+      "expected_article_no": "样例条款 05",
+      "legal_domain": "confidentiality",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-12",
+      "query": "商业秘密泄露后如何通知",
+      "expected_law_title": "DEMO/SAMPLE 保密义务与商业秘密审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "confidentiality",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-13",
+      "query": "背景知识产权和定制成果归属",
+      "expected_law_title": "DEMO/SAMPLE 知识产权审查参考",
+      "expected_article_no": "样例条款 01",
+      "legal_domain": "ip",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-14",
+      "query": "软件许可地域期限和转许可",
+      "expected_law_title": "DEMO/SAMPLE 知识产权审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "ip",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-15",
+      "query": "开源组件许可证披露风险",
+      "expected_law_title": "DEMO/SAMPLE 知识产权审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "ip",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-16",
+      "query": "劳动合同工资支付周期和加班工资",
+      "expected_law_title": "DEMO/SAMPLE 劳动与用工审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "labor",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-17",
+      "query": "员工社会保险可以约定免除吗",
+      "expected_law_title": "DEMO/SAMPLE 劳动与用工审查参考",
+      "expected_article_no": "样例条款 05",
+      "legal_domain": "labor",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-18",
+      "query": "竞业限制期限范围和补偿",
+      "expected_law_title": "DEMO/SAMPLE 劳动与用工审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "labor",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-19",
+      "query": "个人信息处理目的和最小必要范围",
+      "expected_law_title": "DEMO/SAMPLE 数据合规审查参考",
+      "expected_article_no": "样例条款 01",
+      "legal_domain": "data",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-20",
+      "query": "委托处理数据需要约定哪些内容",
+      "expected_law_title": "DEMO/SAMPLE 数据合规审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "data",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-21",
+      "query": "数据安全事件通知调查补救",
+      "expected_law_title": "DEMO/SAMPLE 数据合规审查参考",
+      "expected_article_no": "样例条款 06",
+      "legal_domain": "data",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-22",
+      "query": "约定管辖法院需要实际联系吗",
+      "expected_law_title": "DEMO/SAMPLE 争议解决审查参考",
+      "expected_article_no": "样例条款 02",
+      "legal_domain": "dispute",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-23",
+      "query": "仲裁条款只写仲裁地点是否明确",
+      "expected_law_title": "DEMO/SAMPLE 争议解决审查参考",
+      "expected_article_no": "样例条款 03",
+      "legal_domain": "dispute",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    },
+    {
+      "id": "EVAL-24",
+      "query": "争议期间无争议部分继续履行",
+      "expected_law_title": "DEMO/SAMPLE 争议解决审查参考",
+      "expected_article_no": "样例条款 07",
+      "legal_domain": "dispute",
+      "jurisdiction": "中国大陆",
+      "source_type": "demo_sample"
+    }
+  ]
+}

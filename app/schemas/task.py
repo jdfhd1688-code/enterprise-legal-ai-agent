@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.document import DocumentChunk, ParsedDocument
 from app.schemas.kb import RetrievalResult
+from app.schemas.playbook import PlaybookResult
 from app.schemas.risk import ReviewOutcome, RiskAnalysis, TaskStatus
 
 
@@ -35,6 +36,7 @@ class TaskRecord(BaseModel):
     parsed_document: ParsedDocument | None = None
     chunks: list[DocumentChunk] = Field(default_factory=list)
     retrieval: RetrievalResult = Field(default_factory=RetrievalResult)
+    playbook: PlaybookResult = Field(default_factory=PlaybookResult)
     risk: RiskAnalysis | None = None
     route: str | None = None
     route_reason: str | None = None

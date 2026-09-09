@@ -45,6 +45,10 @@ Enterprise Legal AI Agent 是一个面向企业法务场景的 AI 合同审查�
 - Chunk 切分与 metadata 保留
 - Review Dimension Planner 审查维度识别
 - Legal RAG metadata filtering
+- Hybrid Legal RAG（BM25 + dense hashing + RRF）
+- Enterprise Playbook 规则偏离与版本管理
+- Citation Guard / Evidence Insufficient
+- Redline v1 修改建议
 - Risk JSON / Pydantic Schema
 - Workflow 风险分流
 - Human-in-the-loop 人工复核
@@ -65,10 +69,15 @@ flowchart TD
     A --> RP[Review Dimension Planner]
     A --> R[Retriever Skill]
     R --> KB[Demo Legal Knowledge Base]
-    R --> VS[Vector Search / Metadata Filter]
+    R --> VS[Metadata + BM25 + Dense + RRF]
+    A --> PB[Enterprise Playbook]
     A --> RA[Risk Analysis Skill]
-    RA --> JSON[Risk JSON]
-    JSON --> SG[Pydantic Schema Guard]
+    KB --> RA[Evidence-first Risk Analysis]
+    PB --> RA
+    RA --> RL[Redline Suggestion]
+    RL --> JSON[Risk JSON]
+    JSON --> CG[Citation Guard]
+    CG --> SG[Pydantic Schema Guard]
     SG --> W[Workflow Router]
     W --> HR[Human Review]
     W --> RG[Report Generation]
@@ -87,6 +96,10 @@ enterprise-legal-ai/
 │  ├─ api.py                      # FastAPI service boundary
 │  ├─ config.py                   # Settings / env
 │  ├─ agent/                      # Agent state graph + review planner
+│  ├─ rag/                        # explainable legal query builder
+│  ├─ playbook/                   # versioned enterprise rules engine
+│  ├─ guards/                     # citation verification
+│  ├─ evaluation/                 # retrieval evaluation metrics
 │  ├─ schemas/                    # Pydantic Risk JSON / task / document / KB
 │  ├─ skills/                     # parser, chunker, retrieval, risk, report
 │  ├─ tools/                      # pdf, embeddings, vector search, KB, LLM client
@@ -96,6 +109,8 @@ enterprise-legal-ai/
 ├─ data/
 │  ├─ contracts/                  # sample contracts
 │  └─ legal_kb/                   # DEMO/SAMPLE legal knowledge base
+│  ├─ playbooks/                  # DEMO enterprise contract standards
+│  └─ eval/                       # retrieval evaluation dataset
 ├─ docs/                          # project documentation and screenshots
 ├─ app/static/review_stages/      # 四张最终审查阶段视觉资产
 ├─ scripts/                       # utility scripts and real LLM test
@@ -183,6 +198,26 @@ LLM_TIMEOUT_SECONDS=30
 - 使用 `DEMO/SAMPLE` 示例合同和示例法规知识库；
 - UI 始终提示 Demo 边界和法律免责声明；
 - 上传文件也可以走主流程，仅风险分析在无 Key 时使用规则 / fallback 逻辑。
+
+## Legal Knowledge Base
+
+项目内置 65 条可检索记录，覆盖合同履行、违约与付款交付、保密、知识产权、劳动用工、数据合规和争议解决。每条记录均包含 jurisdiction、legal_domain、status、effective/expiry date、version 和 source_type。所有数据均明确标记为 `DEMO/SAMPLE` / `demo_sample`，不是生产级、实时或权威法律数据库。
+
+## Hybrid Legal RAG
+
+检索先执行 jurisdiction / domain / status metadata filter，再并行计算 BM25 型关键词分数和本地 hashing dense 相似度，最后通过 RRF k=60 融合。关键词检索负责条款编号和法律术语，dense 检索负责语义表达；结果同时返回两路分数、融合排序与 `match_reason`。技术详情默认折叠，面试演示时可查看完整查询、过滤条件与 Top-K。
+
+## Enterprise Playbook
+
+`data/playbooks/` 中的 `demo-v1` 企业审查规则覆盖付款周期、责任上限、解除、自动续期、保密、知识产权、数据、争议解决、验收和用工。规则存储在 JSON 中，没有硬编码到 UI，也为未来 client-specific playbook 预留 version 字段。Playbook 判断的是企业标准偏离，不等同于违法判断。
+
+## Redline Suggestions
+
+Playbook 偏离可生成 Redline v1：原条款、建议条款、修改理由、change type 与 confidence。结果页仅提供修改建议和复制入口，不会自动修改 Word 文件，也不声称实现 Track Changes。
+
+## Evaluation
+
+运行 `python scripts/evaluate_legal_rag.py` 可对 24 条 DEMO/SAMPLE query 执行离线评测。当前固定数据结果：Hit@1 0.875、Hit@3 1.0、Hit@5 1.0、Recall@5 1.0、MRR 0.9375。Citation Guard 还会逐条验证风险输出中的 law title + article number 必须存在于当前检索结果；未验证或证据不足会降低证据状态并进入现有 Human Review 路由。
 
 ## API Boundary
 

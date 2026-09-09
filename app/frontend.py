@@ -359,42 +359,60 @@ def render_result_hero(task: TaskRecord) -> None:
     risk = task.risk
     if not risk:
         return
-    manual = sum(not item.evidence_sufficient or item.severity.value == "high" for item in risk.findings)
+    manual = sum(item.requires_human_review or item.severity.value == "high" for item in risk.findings)
     values = [("综合风险", RISK_LABELS[risk.risk_level.value]), ("风险发现数量", str(len(risk.findings))), ("建议人工复核数量", str(manual)), ("置信度", f"{risk.confidence:.0%}"), ("审查领域", task_dimension(task))]
     metrics = "".join(f'<div class="result-metric"><span>{esc(k)}</span><strong>{esc(v)}</strong></div>' for k, v in values)
     st.markdown(
         f"<div class='result-hero'><div class='result-head'><div><div class='result-kicker'>EXECUTIVE SUMMARY</div>"
-        f"<div class='result-title'>审查执行摘要</div></div><div class='result-complete'>✓ REVIEW COMPLETE</div></div>"
+        f"<div class='result-title'>审查执行摘要</div></div><div class='result-complete'>{'⚑ LEGAL REVIEW REQUIRED' if task.status.value == 'awaiting_review' else '✓ REVIEW COMPLETE'}</div></div>"
         f"<div class='result-summary'>{esc(risk.summary)}</div><div class='result-metrics'>{metrics}</div></div>",
         unsafe_allow_html=True,
     )
 
 
 def render_finding(finding, index: int) -> None:
-    basis = finding.legal_basis[0] if finding.legal_basis else None
-    basis_text = f"{basis.title} · {basis.article_no} · {basis.source}" if basis else "未检索到可验证的法律依据"
-    needs_review = finding.severity.value == "high" or not finding.evidence_sufficient
-    evidence_status = badge("证据充分" if finding.evidence_sufficient else "证据不足", "low" if finding.evidence_sufficient else "high")
+    basis = finding.legal_evidence[0] if finding.legal_evidence else (finding.legal_basis[0] if finding.legal_basis else None)
+    needs_review = finding.requires_human_review or finding.severity.value == "high"
+    evidence_label = {"sufficient": "证据充分", "partial": "证据部分充分", "insufficient": "证据不足"}[finding.evidence_status.value]
+    evidence_status = badge(evidence_label, "low" if finding.evidence_status.value == "sufficient" else "high")
     review_status = badge("建议人工复核" if needs_review else "AI 初审通过", "high" if needs_review else "neutral")
-    insufficient = "<div class='insufficient'>依据不足，需要人工复核</div>" if not finding.evidence_sufficient else ""
+    insufficient = "<div class='insufficient'>法律依据不足或引用未验证，已降低置信度并触发人工复核。</div>" if finding.evidence_status.value == "insufficient" else ""
     st.markdown(
         f"<div class='finding-card {esc(finding.severity.value)}'><div class='finding-top'><div><div class='finding-index'>{index:02d}</div><div class='finding-title'>{esc(finding.issue)}</div></div>{risk_html(finding.severity.value)}</div>"
-        f"<div>{badge(finding.risk_type, 'neutral')} {evidence_status} {review_status}</div>{insufficient}<div class='finding-grid'>"
+        f"<div>{badge(finding.risk_type, 'neutral')} {evidence_status} {review_status}</div>{insufficient}<div class='finding-grid compact'>"
         f"<div class='detail-block'><div class='detail-label'>合同证据 · {esc(finding.evidence_section or finding.clause_id)}</div><div class='detail-text'>{esc(finding.contract_evidence)}</div></div>"
-        f"<div class='detail-block'><div class='detail-label'>风险说明</div><div class='detail-text'>{esc(finding.issue)}</div></div>"
-        f"<div class='detail-block'><div class='detail-label'>法律依据</div><div class='detail-text'>{esc(basis_text)}</div></div>"
         f"<div class='detail-block'><div class='detail-label'>AI 建议</div><div class='detail-text'>{esc(finding.recommendation)}</div></div></div></div>", unsafe_allow_html=True,
     )
-    a, b, _ = st.columns([1, 1.25, 4])
-    a.button("查看证据", key=f"evidence_{index}_{finding.clause_id}", width="stretch")
-    if b.button("加入人工复核", key=f"manual_{index}_{finding.clause_id}", width="stretch"):
-        st.toast("已标记供法务关注；任务路由仍遵循现有工作流规则。")
+    with st.expander("查看判断依据 · Why this risk?", expanded=index == 1):
+        st.markdown("#### 证据链")
+        st.markdown(f"**1　合同原文证据**  \n{finding.contract_evidence or '未定位到合同原文'}")
+        st.markdown("**2　企业 Playbook**")
+        if finding.playbook_evidence:
+            for item in finding.playbook_evidence:
+                st.info(f"{item.title}（{item.rule_id} · {item.version}）\n\n企业标准：{item.expected}\n\n合同实际：{item.actual}\n\n偏离：{item.deviation}")
+        else:
+            st.caption("没有发现适用的企业 Playbook 偏离。")
+        st.markdown("**3　法律依据**")
+        if basis:
+            verified = "已通过 Citation Guard 验证" if basis.citation_status.value == "verified" else "引用未验证"
+            st.success(f"{basis.title} · {basis.article_no}\n\n{basis.text or basis.match_reason}\n\n辖区：{basis.jurisdiction}｜状态：{basis.status}｜{verified}｜{basis.source_type}")
+        else:
+            st.warning("未检索到足够法律依据；系统不会编造 citation。")
+        st.markdown(f"**4　风险判断**  \n{finding.reasoning or finding.issue}")
+        st.markdown(f"**5　修改建议**  \n{finding.recommendation}")
+        if finding.redline:
+            st.markdown("#### Redline v1 · 修改前后对比")
+            before, after = st.columns(2, gap="large")
+            before.markdown(f"<div class='redline-box before'><span>BEFORE · 原条款</span><p>{esc(finding.redline.original_clause)}</p></div>", unsafe_allow_html=True)
+            after.markdown(f"<div class='redline-box after'><span>AFTER · 建议条款</span><p>{esc(finding.redline.suggested_clause)}</p></div>", unsafe_allow_html=True)
+            st.caption(f"修改理由：{finding.redline.change_reason}｜该建议不会自动修改原合同。")
+            st.code(finding.redline.suggested_clause, language=None)
 
 
 def technical_details(task: TaskRecord) -> None:
     with st.expander("查看技术处理详情", expanded=False):
-        overview_tab, metadata_tab, risk_tab, mcp_tab = st.tabs(
-            ["处理概览", "Metadata", "Risk JSON", "MCP Mock Log"]
+        overview_tab, retrieval_tab, metadata_tab, risk_tab, mcp_tab = st.tabs(
+            ["处理概览", "Legal Retrieval Debug", "Metadata", "Risk JSON", "MCP Mock Log"]
         )
         with overview_tab:
             st.markdown("#### Review Dimension")
@@ -411,6 +429,26 @@ def technical_details(task: TaskRecord) -> None:
             st.markdown("#### Agent Execution Trace")
             for event in task.events:
                 st.markdown(f"- `{event.stage}` · {event.message}")
+        with retrieval_tab:
+            st.write({
+                "query": task.retrieval.query,
+                "query_expansion": task.retrieval.queries,
+                "metadata_filters": task.retrieval.metadata_filters,
+                "fusion": task.retrieval.fusion_method,
+                "top_k": task.retrieval.top_k,
+                "jurisdiction_assumption": task.retrieval.jurisdiction_assumption,
+            })
+            st.markdown("#### Keyword / BM25 hits")
+            st.write(task.retrieval.keyword_hits)
+            st.markdown("#### Dense semantic hits")
+            st.write(task.retrieval.dense_hits)
+            st.markdown("#### RRF fusion result")
+            st.json([{
+                "rank": hit.rank, "document_id": hit.chunk.document_id,
+                "law_title": hit.chunk.title, "article_no": hit.chunk.article_no,
+                "keyword_score": hit.keyword_score, "dense_score": hit.dense_score,
+                "fusion_score": hit.fusion_score, "match_reason": hit.match_reason,
+            } for hit in task.retrieval.hits])
         with metadata_tab:
             st.json([hit.metadata for hit in task.retrieval.hits])
         with risk_tab:
@@ -496,6 +534,12 @@ def human_review_page(service: AnalysisService) -> None:
                     basis = finding.legal_basis[0] if finding.legal_basis else None
                     st.markdown(f"**{index:02d} · {finding.issue}**"); st.caption(f"合同证据：{finding.contract_evidence}")
                     st.write(f"AI 建议：{finding.recommendation}"); st.write(f"法律依据：{basis.title + ' · ' + basis.article_no if basis else '依据不足'}")
+                    if basis:
+                        st.caption(f"Citation Guard：{basis.citation_status.value}｜证据状态：{finding.evidence_status.value}")
+                    for item in finding.playbook_evidence:
+                        st.warning(f"Playbook {item.rule_id}：{item.actual} → 企业标准 {item.expected}")
+                    if finding.redline:
+                        st.markdown(f"**Redline 建议**：{finding.redline.suggested_clause}")
     with human_col:
         with st.container(border=True):
             st.markdown('<div class="review-panel-marker human"></div><div class="review-panel-kicker">LEGAL DECISION</div><div class="column-title">法务复核</div>', unsafe_allow_html=True)
@@ -538,7 +582,13 @@ def reports_page(service: AnalysisService) -> None:
         for index, finding in enumerate(risk.findings, 1):
             st.markdown(f"**{index}. {finding.issue}**　{risk_html(finding.severity.value)}", unsafe_allow_html=True)
             st.write(f"合同证据：{finding.contract_evidence}"); st.write(f"处理建议：{finding.recommendation}")
-            if finding.legal_basis: st.caption("法律依据：" + "；".join(f"{item.title} {item.article_no}" for item in finding.legal_basis))
+            if finding.legal_basis: st.caption("法律依据：" + "；".join(f"{item.title} {item.article_no}（{item.citation_status.value}）" for item in finding.legal_basis))
+            for item in finding.playbook_evidence:
+                st.caption(f"企业 Playbook：{item.title}｜标准 {item.expected}｜实际 {item.actual}｜{item.version}")
+            if finding.redline:
+                before, after = st.columns(2)
+                before.markdown(f"**原条款**  \n{finding.redline.original_clause}")
+                after.markdown(f"**建议条款**  \n{finding.redline.suggested_clause}")
     st.markdown("### 免责声明")
     st.caption("本报告由 AI 辅助生成，仅用于企业内部风险初筛与法务工作支持，不构成正式法律意见。法规引用含 DEMO/SAMPLE 数据，请在正式决策前由专业人员核验。")
 

@@ -25,6 +25,17 @@ class Severity(str, Enum):
     high = "high"
 
 
+class EvidenceStatus(str, Enum):
+    sufficient = "sufficient"
+    partial = "partial"
+    insufficient = "insufficient"
+
+
+class CitationStatus(str, Enum):
+    verified = "verified"
+    unverified = "unverified"
+
+
 class TaskStatus(str, Enum):
     submitted = "submitted"
     parsing = "parsing"
@@ -53,21 +64,33 @@ class LegalBasis(BaseModel):
     source_type: str = "demo_sample"
     match_reason: str = "semantic_similarity"
     is_demo_sample: bool = True
+    text: str = ""
+    document_id: str | None = None
+    citation_status: CitationStatus = CitationStatus.unverified
 
-    @field_validator("effective_date", mode="before")
+    @field_validator("effective_date", "expiry_date", mode="before")
     @classmethod
     def empty_date_to_none(cls, value: object) -> object:
-        if value in ("", None):
-            return None
-        return value
+        return None if value in ("", None) else value
 
-    @field_validator("expiry_date", mode="before")
-    @classmethod
-    def empty_expiry_to_none(cls, value: object) -> object:
-        if value in ("", None):
-            return None
-        return value
 
+class PlaybookEvidence(BaseModel):
+    rule_id: str
+    title: str
+    version: str = "demo-v1"
+    expected: str = ""
+    actual: str = ""
+    deviation: str = ""
+    severity: Severity = Severity.medium
+    source_type: str = "demo_sample"
+
+
+class RedlineSuggestion(BaseModel):
+    original_clause: str
+    suggested_clause: str
+    change_reason: str
+    change_type: str = "replace"
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
 
 class Finding(BaseModel):
     clause_id: str
@@ -80,6 +103,14 @@ class Finding(BaseModel):
     evidence_page: int | None = None
     evidence_section: str | None = None
     evidence_sufficient: bool = True
+    legal_evidence: list[LegalBasis] = Field(default_factory=list)
+    playbook_evidence: list[PlaybookEvidence] = Field(default_factory=list)
+    playbook_deviation: str | None = None
+    reasoning: str = ""
+    redline: RedlineSuggestion | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    evidence_status: EvidenceStatus = EvidenceStatus.sufficient
+    requires_human_review: bool = False
 
 
 class RiskAnalysis(BaseModel):
@@ -97,6 +128,9 @@ class RiskAnalysis(BaseModel):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     analysis_mode: str = "demo-heuristic"
     model_version: str = "demo-heuristic-v1"
+    evidence_status: EvidenceStatus = EvidenceStatus.sufficient
+    citation_validation_summary: str = ""
+    playbook_version: str | None = None
 
 
 class ReviewDecision(str, Enum):

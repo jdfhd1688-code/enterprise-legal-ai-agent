@@ -30,6 +30,8 @@ class TempSettings:
             upload_dir=root / "uploads",
             contract_dir=root / "contracts",
             legal_kb_dir=kb_dir,
+            playbook_dir=ROOT / "data" / "playbooks" if self.use_real_kb else root / "playbooks",
+            eval_dir=ROOT / "data" / "eval" if self.use_real_kb else root / "eval",
         )
         settings.ensure_dirs()
         return settings

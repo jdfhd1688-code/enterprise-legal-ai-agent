@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.config import Settings, get_settings
 from app.schemas.kb import RetrievalResult
-from app.schemas.risk import RiskAnalysis, RiskLevel
+from app.schemas.risk import CitationStatus, EvidenceStatus, RiskAnalysis, RiskLevel, Severity
 
 
 class WorkflowRoute:
@@ -26,6 +26,12 @@ class WorkflowRouter:
             return False
         if any(
             basis.status not in {"current", "effective"}
+            for finding in risk.findings
+            for basis in finding.legal_basis
+        ):
+            return False
+        if any(
+            basis.citation_status != CitationStatus.verified
             for finding in risk.findings
             for basis in finding.legal_basis
         ):
@@ -54,6 +60,17 @@ class WorkflowRouter:
             reasons.append("高风险管理维度需要人工复核")
         if not evidence_ok:
             reasons.append("法律知识库证据不足，不允许自动生成确定性报告")
+        if any(
+            basis.citation_status == CitationStatus.unverified
+            for finding in risk.findings
+            for basis in finding.legal_basis
+        ):
+            reasons.append("存在未通过 Citation Guard 的法律引用")
+        if any(
+            finding.playbook_deviation and finding.severity == Severity.high
+            for finding in risk.findings
+        ):
+            reasons.append("高风险企业 Playbook 偏离")
         if not risk.evidence_sufficient:
             reasons.append("evidence_sufficient=false")
         if risk.requires_human_review:
@@ -61,12 +78,14 @@ class WorkflowRouter:
 
         if reasons:
             risk.requires_human_review = True
+            risk.evidence_status = EvidenceStatus.sufficient if evidence_ok else EvidenceStatus.partial
             risk.review_reason = "；".join(dict.fromkeys(reasons))
             return WorkflowRoute.awaiting_review, risk
 
         risk.requires_human_review = False
         risk.review_reason = None
         risk.evidence_sufficient = True
+        risk.evidence_status = EvidenceStatus.sufficient
         return WorkflowRoute.report, risk
 
 

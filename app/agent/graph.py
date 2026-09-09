@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.config import Settings, get_settings
+from app.guards.citation_guard import CitationGuard
+from app.playbook.engine import PlaybookEngine
 from app.schemas.kb import RetrievalResult
 from app.schemas.task import AuditEvent, StageEvent, TaskRecord
 from app.schemas.risk import RiskAnalysis, TaskStatus
@@ -35,6 +37,8 @@ class AgentGraph:
         self.chunker = ChunkerSkill()
         self.retrieval_skill = RetrievalSkill(kb_tool)
         self.risk_skill = RiskAnalysisSkill(self.settings)
+        self.playbook = PlaybookEngine(self.settings)
+        self.citation_guard = CitationGuard()
         self.schema_guard = SchemaGuard()
         self.router = WorkflowRouter(self.settings)
         self.report_generator = ReportGenerator()
@@ -84,6 +88,14 @@ class AgentGraph:
             else:
                 self._event(task, "retrieve", f"检索到 {len(retrieval.hits)} 条 DEMO/SAMPLE 知识库证据。")
 
+            playbook_result = self.playbook.evaluate(chunks, plan.dimension)
+            task.playbook = playbook_result
+            self._event(
+                task,
+                "playbook",
+                f"执行 {playbook_result.rules_evaluated} 条 {playbook_result.version} 规则，识别 {len(playbook_result.deviations)} 项偏离。",
+            )
+
             task.status = TaskStatus.analyzing
             self._notify(on_stage, "analyzing", "正在结合合同证据与法律依据分析风险。")
             risk = self.risk_skill.analyze(
@@ -93,7 +105,9 @@ class AgentGraph:
                 chunks=chunks,
                 retrieval=retrieval,
                 review_dimension=plan.dimension,
+                playbook_result=playbook_result,
             )
+            risk = self.citation_guard.validate(risk, retrieval)
             risk.review_dimension = plan.dimension
             task.risk = risk
             task.touch()
@@ -192,6 +206,7 @@ class AgentGraph:
             "parse": "document_parsed",
             "chunk": "chunks_created",
             "retrieve": "retrieval_completed",
+            "playbook": "playbook_evaluated",
             "analyze": "risk_analysis_completed",
             "validate": "schema_validated",
             "workflow_router": "workflow_routed",
