@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import html
+from functools import lru_cache
+from pathlib import Path
 
 
 STAGE_ORDER = (
@@ -59,6 +62,16 @@ PROGRESS_STEPS = (
     ("validating", "结果校验"), ("reporting", "报告生成"),
 )
 
+_STAGE_ASSET_DIR = Path(__file__).resolve().parent / "static" / "review_stages"
+
+
+@lru_cache(maxsize=4)
+def _asset_data_uri(filename: str) -> str:
+    """Embed an approved stage PNG so Streamlit does not need a static route."""
+    asset_path = _STAGE_ASSET_DIR / filename
+    encoded = base64.b64encode(asset_path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
 
 def visual_stage_for(workflow_stage: str) -> int:
     """Map a fine-grained workflow state to one of the four approved visuals."""
@@ -99,19 +112,13 @@ def render_review_experience(stage: str, filename: str) -> str:
     visual_number = visual_stage_for(safe_stage)
     visual = VISUAL_STAGES[visual_number]
     status_title, status_description = STAGE_COPY[safe_stage]
-    asset_url = f"app/static/review_stages/{visual['asset']}"
-    preload_html = ""
-    if safe_stage not in {"review_required", "failed"} and visual_number < 4:
-        next_visual = VISUAL_STAGES[visual_number + 1]
-        next_asset_url = f"app/static/review_stages/{next_visual['asset']}"
-        preload_html = f'<link rel="preload" as="image" href="{next_asset_url}">'
+    asset_url = _asset_data_uri(visual["asset"])
     review_notice = (
         '<div class="process-review-branch"><strong>HUMAN REVIEW REQUIRED</strong>'
         '<span>任务停留在风险分析阶段，未展示“审查完成”。</span></div>'
         if safe_stage == "review_required" else ""
     )
     return f"""
-    {preload_html}
     <div class="review-process stage-{safe_stage} visual-stage-{visual_number}">
       <div class="process-heading">
         <div><div class="process-kicker">CINEMATIC LEGAL REVIEW · STAGE {visual_number:02d}</div>
@@ -119,7 +126,7 @@ def render_review_experience(stage: str, filename: str) -> str:
         <p>{html.escape(visual['description'])}</p>
       </div>
       <div class="process-visual">
-        <img src="{asset_url}" alt="{html.escape(visual['alt'])}" loading="eager" decoding="async" fetchpriority="high">
+        <img src="{asset_url}" data-stage-asset="{visual['asset']}" alt="{html.escape(visual['alt'])}" loading="eager" decoding="async" fetchpriority="high">
         <div class="process-visual-shade"></div><div class="process-live-state"><span></span>REAL WORKFLOW</div>
       </div>
       <div class="process-status"><div class="status-mark"><span></span></div>

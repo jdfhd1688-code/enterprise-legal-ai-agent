@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import re
 import unittest
 from pathlib import Path
 
@@ -15,7 +17,10 @@ class Stage2ExperienceTests(unittest.TestCase):
         markup = render_review_experience("retrieving", "sample_contract.pdf")
         self.assertIn("循法而行", markup)
         self.assertIn("正在检索法律依据", markup)
-        self.assertIn("app/static/review_stages/stage2.png", markup)
+        self.assertIn('data-stage-asset="stage2.png"', markup)
+        image_match = re.search(r'src="data:image/png;base64,([^"]+)"', markup)
+        self.assertIsNotNone(image_match)
+        self.assertEqual(base64.b64decode(image_match.group(1))[:8], b"\x89PNG\r\n\x1a\n")
         self.assertIn("alt=", markup)
         self.assertIn("process-step active", markup)
         self.assertNotIn("78%", markup)
