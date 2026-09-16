@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from app.schemas.document import DocumentChunk, ParsedDocument
+from app.schemas.deliverable import DeliverableMetadata, RedlineApplyResult, ReviewItemDecision
 from app.schemas.kb import RetrievalResult
 from app.schemas.playbook import PlaybookResult
 from app.schemas.risk import ReviewOutcome, RiskAnalysis, TaskStatus
@@ -28,6 +29,11 @@ class AuditEvent(BaseModel):
 class TaskRecord(BaseModel):
     task_id: str
     original_filename: str
+    source_extension: str = ""
+    upload_sha256: str = ""
+    workflow_state: str = "submitted"
+    visual_stage: str = "received"
+    jurisdiction: str = "中国大陆（DEMO 默认，需确认）"
     question: str
     review_dimension: str = "general_contract"
     status: TaskStatus = TaskStatus.submitted
@@ -47,6 +53,11 @@ class TaskRecord(BaseModel):
     report_markdown: str | None = None
     report_html_ready: bool = False
     review: ReviewOutcome | None = None
+    review_items: list[ReviewItemDecision] = Field(default_factory=list)
+    review_finalized: bool = False
+    final_status: str = "pending"
+    deliverables: list[DeliverableMetadata] = Field(default_factory=list)
+    redline_apply_results: list[RedlineApplyResult] = Field(default_factory=list)
     error: str | None = None
 
     def touch(self) -> None:

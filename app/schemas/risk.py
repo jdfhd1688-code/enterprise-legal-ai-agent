@@ -12,6 +12,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.document import DocumentAnchor
+
 
 class RiskLevel(str, Enum):
     low = "low"
@@ -86,11 +88,18 @@ class PlaybookEvidence(BaseModel):
 
 
 class RedlineSuggestion(BaseModel):
+    risk_id: str | None = None
+    anchor: DocumentAnchor | None = None
     original_clause: str
     suggested_clause: str
     change_reason: str
-    change_type: str = "replace"
+    change_type: str = Field(default="replace", pattern="^(replace|insert|delete)$")
     confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+    approved_by_human: bool | None = None
+    human_action: str = "pending"
+    human_final_clause: str | None = None
+    redline_status: str = "pending"
+    failure_reason: str | None = None
 
 class Finding(BaseModel):
     clause_id: str

@@ -20,6 +20,16 @@ class ChunkerSkill:
     max_chunk_chars = 900
 
     def chunk(self, parsed: ParsedDocument) -> list[DocumentChunk]:
+        if parsed.anchors:
+            anchored: list[DocumentChunk] = []
+            for anchor in parsed.anchors:
+                for piece_index, piece in enumerate(self._split_long(anchor.text), start=1):
+                    anchored.append(DocumentChunk(
+                        chunk_id=anchor.clause_id if piece_index == 1 else f"{anchor.clause_id}-{piece_index}",
+                        source=parsed.source, page_no=1, section=anchor.heading or anchor.clause_id,
+                        text=piece.strip(), anchor=anchor,
+                    ))
+            return anchored
         chunks: list[DocumentChunk] = []
         for page in parsed.pages:
             page_text = page.text.strip()

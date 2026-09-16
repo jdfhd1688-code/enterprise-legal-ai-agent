@@ -213,7 +213,7 @@ LLM_TIMEOUT_SECONDS=30
 
 ## Redline Suggestions
 
-Playbook 偏离可生成 Redline v1：原条款、建议条款、修改理由、change type 与 confidence。结果页仅提供修改建议和复制入口，不会自动修改 Word 文件，也不声称实现 Track Changes。
+Playbook 偏离可生成 Redline v1：原条款、建议条款、修改理由、change type 与 confidence。经人工复核确认且通过锚点、置信度与一致性校验后，可生成 Clean Revised DOCX 与高亮 Redline 对照版；不声称实现原生 Word Track Changes。
 
 ## Evaluation
 

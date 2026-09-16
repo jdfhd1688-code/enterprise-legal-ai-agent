@@ -15,6 +15,7 @@ import streamlit as st
 
 from app.agent.review_planner import DIMENSION_LABELS, REVIEW_DIMENSIONS
 from app.schemas.risk import ReviewDecision, Severity
+from app.schemas.deliverable import ReviewItemAction
 from app.review_experience import render_review_experience
 from app.schemas.task import TaskRecord
 from app.services.analysis_service import AnalysisService
@@ -200,7 +201,7 @@ def review_page(service: AnalysisService) -> None:
         uploaded = st.file_uploader("拖放或选择合同文件", type=["pdf", "docx", "txt"], key="contract_uploader")
     elif st.session_state.source_mode == "demo":
         st.markdown('<div class="selection-note">已选择“体验示例”。上传区域已隐藏。</div>', unsafe_allow_html=True)
-        high, low = st.columns(2, gap="large")
+        high, low, docx_demo = st.columns(3, gap="large")
         with high:
             choice_copy("高风险示例合同", "包含交付、违约等风险，用于体验人工复核流程。")
             if st.button("使用高风险示例", type="primary" if st.session_state.sample_kind == "high" else "secondary", width="stretch"):
@@ -209,6 +210,10 @@ def review_page(service: AnalysisService) -> None:
             choice_copy("低风险示例合同", "风险条款相对完整，可直接体验报告生成流程。")
             if st.button("使用低风险示例", type="primary" if st.session_state.sample_kind == "low" else "secondary", width="stretch"):
                 st.session_state.sample_kind = "low"; st.rerun()
+        with docx_demo:
+            choice_copy("DOCX 交付闭环", "带段落锚点的合成合同，用于体验人工复核与修订版下载。")
+            if st.button("使用 DOCX 示例", type="primary" if st.session_state.sample_kind == "docx" else "secondary", width="stretch"):
+                st.session_state.sample_kind = "docx"; st.rerun()
     step_header(2, "选择审查方式")
     full_col, special_col = st.columns(2, gap="large")
     with full_col:
@@ -242,7 +247,7 @@ def review_page(service: AnalysisService) -> None:
     if st.session_state.source_mode == "upload":
         contract_name = uploaded.name if uploaded else "等待上传合同"
     elif st.session_state.source_mode == "demo":
-        contract_name = "示例高风险合同" if st.session_state.sample_kind == "high" else "示例低风险合同"
+        contract_name = {"high": "示例高风险合同", "low": "示例低风险合同", "docx": "DOCX 交付闭环示例"}[st.session_state.sample_kind]
     else:
         contract_name = "尚未选择合同来源"
     method_name = "智能全面审查" if st.session_state.review_mode == "full" else "专项审查"
@@ -257,8 +262,12 @@ def review_page(service: AnalysisService) -> None:
     method_ready = st.session_state.review_mode == "full" or bool(selected_dimensions)
     if st.button("开始智能审查", type="primary", width="stretch", disabled=not (source_ready and method_ready)):
         if st.session_state.source_mode == "demo":
-            filename = f"sample_contract_{st.session_state.sample_kind}_risk.pdf"
-            data = (service.settings.contract_dir / filename).read_bytes()
+            if st.session_state.sample_kind == "docx":
+                filename = "demo_phase4_contract.docx"
+                data = (service.settings.data_dir / "demo_contracts" / filename).read_bytes()
+            else:
+                filename = f"sample_contract_{st.session_state.sample_kind}_risk.pdf"
+                data = (service.settings.contract_dir / filename).read_bytes()
         else:
             filename, data = uploaded.name, uploaded.getvalue()
         st.session_state["review_request"] = {
@@ -409,6 +418,30 @@ def render_finding(finding, index: int) -> None:
             st.code(finding.redline.suggested_clause, language=None)
 
 
+def render_deliverables(service: AnalysisService, task: TaskRecord) -> None:
+    if not task.deliverables:
+        return
+    section("交付文件", "最终报告与合同版本均记录 SHA-256")
+    labels = {
+        "final_report": ("最终审查报告", "DOCX 报告"),
+        "reviewed_contract": ("修订版合同", "Clean Revised Contract"),
+        "redline_contract": ("Redline 对照版", "高亮修改痕迹，非原生 Track Changes"),
+    }
+    columns = st.columns(min(3, len(task.deliverables)), gap="large")
+    for column, item in zip(columns, task.deliverables):
+        title, description = labels.get(item.type, (item.type, "交付文件"))
+        with column:
+            with st.container(border=True):
+                st.markdown(f"**{title}**")
+                st.caption(description)
+                st.caption(f"SHA-256　{item.sha256[:16]}…　{item.size_bytes:,} bytes")
+                try:
+                    filename, content = service.get_deliverable(task.task_id, item.type)
+                    st.download_button("下载", content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"deliver_{task.task_id}_{item.type}", width="stretch")
+                except Exception:
+                    st.warning("文件当前不可用，请查看技术详情。")
+
+
 def technical_details(task: TaskRecord) -> None:
     with st.expander("查看技术处理详情", expanded=False):
         overview_tab, retrieval_tab, metadata_tab, risk_tab, mcp_tab = st.tabs(
@@ -489,6 +522,7 @@ def result_page(service: AnalysisService) -> None:
         go("human_review", task.task_id); st.session_state["review_task_id"] = task.task_id; st.rerun()
     if task.report_markdown:
         st.download_button("下载审查报告", task.report_markdown, f"{task.task_id}_report.md", "text/markdown")
+    render_deliverables(service, task)
     section("技术详情", "默认折叠，仅供技术评审")
     technical_details(task)
 
@@ -546,10 +580,27 @@ def human_review_page(service: AnalysisService) -> None:
             for finding in (task.risk.findings if task.risk else []):
                 severity = st.selectbox(f"最终风险等级 · {finding.clause_id}", [i.value for i in Severity], index=[i.value for i in Severity].index(finding.severity.value), format_func=lambda value: RISK_LABELS[value], key=f"review_severity_{task.task_id}_{finding.clause_id}")
                 recommendation = st.text_area("修改建议", value=finding.recommendation, key=f"review_rec_{task.task_id}_{finding.clause_id}")
-                modifications[finding.clause_id] = {"issue": finding.issue, "recommendation": recommendation, "severity": severity}
+                actions = [ReviewItemAction.accept.value, ReviewItemAction.edit.value, ReviewItemAction.reject.value] if finding.redline else [ReviewItemAction.resolved.value, ReviewItemAction.reject.value, ReviewItemAction.escalate.value]
+                action = st.radio(
+                    f"人工处理 · {finding.clause_id}", actions, horizontal=True,
+                    format_func=lambda value: {"accept": "接受建议", "edit": "编辑建议", "reject": "拒绝建议", "resolved": "标记已解决", "escalate": "继续升级"}[value],
+                    key=f"review_action_{task.task_id}_{finding.clause_id}",
+                )
+                final_clause = ""
+                if finding.redline:
+                    st.caption(f"合同原文：{finding.redline.original_clause}")
+                    final_clause = st.text_area(
+                        "人工最终条款", value=finding.redline.suggested_clause,
+                        disabled=action != ReviewItemAction.edit.value,
+                        key=f"final_clause_{task.task_id}_{finding.clause_id}",
+                    )
+                modifications[finding.clause_id] = {
+                    "issue": finding.issue, "recommendation": recommendation, "severity": severity,
+                    "redline_action": action, "human_final_clause": final_clause,
+                }
             decision = st.radio("最终决策", [i.value for i in ReviewDecision], format_func=lambda value: {"approve": "通过", "request_changes": "要求修改", "reject": "不通过"}[value], horizontal=True, key=f"decision_{task.task_id}")
             comment = st.text_area("复核意见", placeholder="记录判断依据、修改要求或后续处理意见。", key=f"comment_{task.task_id}")
-            if st.button("保存复核结果", type="primary", width="stretch", key=f"save_{task.task_id}"):
+            if st.button("最终确认并生成交付文件", type="primary", width="stretch", key=f"save_{task.task_id}"):
                 try:
                     service.submit_review(task.task_id, ReviewDecision(decision), comment=comment, modifications=modifications, reviewer="demo-reviewer")
                     st.session_state.pop("review_task_id", None); st.toast("复核结果与审计记录已保存。"); st.rerun()
@@ -591,6 +642,7 @@ def reports_page(service: AnalysisService) -> None:
                 after.markdown(f"**建议条款**  \n{finding.redline.suggested_clause}")
     st.markdown("### 免责声明")
     st.caption("本报告由 AI 辅助生成，仅用于企业内部风险初筛与法务工作支持，不构成正式法律意见。法规引用含 DEMO/SAMPLE 数据，请在正式决策前由专业人员核验。")
+    render_deliverables(service, task)
 
 
 def history_page(service: AnalysisService) -> None:
@@ -599,14 +651,15 @@ def history_page(service: AnalysisService) -> None:
     section("历史任务", f"共 {len(tasks)} 条")
     if not tasks:
         st.markdown('<div class="empty-panel">暂无历史审查记录。</div>', unsafe_allow_html=True); return
-    header = st.columns([1.55, 1.65, 1, 1.1, .7, .85, 1.15, .65])
-    for col, label in zip(header, ["task_id", "合同名称", "审查方式", "审查维度", "风险等级", "状态", "创建时间", "详情"]): col.caption(label)
+    header = st.columns([1.35, 1.5, .9, 1, .65, .8, .65, 1.05, .6])
+    for col, label in zip(header, ["task_id", "合同名称", "审查方式", "审查维度", "风险", "状态", "交付", "创建时间", "详情"]): col.caption(label)
     for task in tasks:
-        cols = st.columns([1.55, 1.65, 1, 1.1, .7, .85, 1.15, .65], vertical_alignment="center")
+        cols = st.columns([1.35, 1.5, .9, 1, .65, .8, .65, 1.05, .6], vertical_alignment="center")
         mode = "智能全面审查" if task.review_dimension == "general_contract" else "专项审查"
         for col, value in zip(cols[:4], [task.task_id, task.original_filename, mode, task_dimension(task)]): col.write(value)
-        cols[4].markdown(risk_html(task_level(task)), unsafe_allow_html=True); cols[5].markdown(status_html(task.status.value), unsafe_allow_html=True); cols[6].write(format_time(task.created_at))
-        if cols[7].button("查看", key=f"history_{task.task_id}"): go("result", task.task_id); st.rerun()
+        cols[4].markdown(risk_html(task_level(task)), unsafe_allow_html=True); cols[5].markdown(status_html(task.status.value), unsafe_allow_html=True)
+        cols[6].write(f"{len(task.deliverables)} 个" if task.deliverables else "待生成"); cols[7].write(format_time(task.created_at))
+        if cols[8].button("查看", key=f"history_{task.task_id}"): go("result", task.task_id); st.rerun()
 
 
 def main() -> None:

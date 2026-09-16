@@ -31,8 +31,21 @@ class TaskStore:
 
     def save(self, task: TaskRecord) -> TaskRecord:
         path = self.path_for(task.task_id)
-        data = task.model_dump_json(indent=2)
-        path.write_text(data, encoding="utf-8")
+        task.workflow_state = task.status.value
+        task.visual_stage = {
+            "submitted": "received", "parsing": "parsing", "chunking": "parsing",
+            "retrieving": "retrieving", "analyzing": "analyzing", "validating": "validating",
+            "routing": "validating", "awaiting_review": "review_required",
+            "report_ready": "completed", "reviewed": "completed",
+        }.get(task.status.value, task.visual_stage)
+        persisted = task.model_copy(deep=True)
+        if persisted.risk is not None:
+            persisted.parsed_document = None
+            persisted.chunks = []
+        data = persisted.model_dump_json(indent=2)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(data, encoding="utf-8")
+        temporary.replace(path)
         return task
 
     def load(self, task_id: str) -> TaskRecord:

@@ -55,6 +55,8 @@ class PlaybookEngine:
                 redline = None
                 if rule.suggested_clause:
                     redline = RedlineSuggestion(
+                        risk_id=chunk.chunk_id,
+                        anchor=chunk.anchor,
                         original_clause=" ".join(chunk.text.split())[:600],
                         suggested_clause=rule.suggested_clause,
                         change_reason=f"偏离 {rule.rule_id}（{rule.version}）：{deviation}",

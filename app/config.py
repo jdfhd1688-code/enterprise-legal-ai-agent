@@ -25,6 +25,7 @@ PLAYBOOK_DIR = DATA_DIR / "playbooks"
 EVAL_DIR = DATA_DIR / "eval"
 TASK_DIR = DATA_DIR / "tasks"
 UPLOAD_DIR = DATA_DIR / "uploads"
+OUTPUT_DIR = DATA_DIR / "outputs"
 
 
 def _as_bool(name: str, default: bool = False) -> bool:
@@ -60,6 +61,7 @@ class Settings:
     eval_dir: Path = EVAL_DIR
     task_dir: Path = TASK_DIR
     upload_dir: Path = UPLOAD_DIR
+    output_dir: Path = OUTPUT_DIR
 
     enable_real_llm: bool = field(default_factory=lambda: _as_bool("ENABLE_REAL_LLM"))
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", "").strip())
@@ -79,7 +81,10 @@ class Settings:
     review_required_domains: tuple[str, ...] = field(default=("intellectual_property",))
 
     def ensure_dirs(self) -> None:
-        for directory in (self.task_dir, self.upload_dir, self.contract_dir, self.playbook_dir, self.eval_dir):
+        for directory in (
+            self.task_dir, self.upload_dir, self.output_dir, self.contract_dir,
+            self.playbook_dir, self.eval_dir,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
 
     @property

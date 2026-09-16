@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.schemas.document import DocumentPage, ParsedDocument
+from app.schemas.document import DocumentAnchor, DocumentPage, ParsedDocument
 from app.tools.pdf_tool import PdfTool
 
 
@@ -28,12 +28,13 @@ class DocumentParserSkill:
 
         content_type = extension.lstrip(".") or "unknown"
         warnings: list[str] = []
+        anchors: list[DocumentAnchor] = []
         if extension == ".pdf":
             pages = self._parse_pdf(data, filename)
         elif extension == ".txt":
             pages = self._parse_txt(data, filename)
         else:
-            pages = self._parse_docx(data, filename)
+            pages, anchors = self._parse_docx(data, filename)
 
         real_pages = [page for page in pages if page.text.strip()]
         if not real_pages:
@@ -53,6 +54,7 @@ class DocumentParserSkill:
             parse_warnings=warnings,
             num_pages=len(real_pages),
             text_length=total_length,
+            anchors=anchors,
         )
 
     @staticmethod
@@ -75,7 +77,7 @@ class DocumentParserSkill:
         return [DocumentPage(source=filename, page_no=1, text=text.strip(), section="page")]
 
     @staticmethod
-    def _parse_docx(data: bytes, filename: str) -> list[DocumentPage]:
+    def _parse_docx(data: bytes, filename: str) -> tuple[list[DocumentPage], list[DocumentAnchor]]:
         try:
             import docx  # type: ignore
         except ImportError as exc:
@@ -84,7 +86,40 @@ class DocumentParserSkill:
             from io import BytesIO
 
             document = docx.Document(BytesIO(data))
-            text = "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
-            return [DocumentPage(source=filename, page_no=1, text=text.strip(), section="page")]
+            document_id = Path(filename).stem
+            anchors: list[DocumentAnchor] = []
+            heading = ""
+            offset = 0
+            for index, paragraph in enumerate(document.paragraphs):
+                text = paragraph.text.strip()
+                if not text:
+                    continue
+                style_name = paragraph.style.name if paragraph.style else ""
+                if style_name.lower().startswith("heading") or style_name in {"标题", "Title"}:
+                    heading = text
+                anchors.append(DocumentAnchor(
+                    document_id=document_id, paragraph_index=index, clause_id=f"P{index:04d}",
+                    heading=heading, text=text, anchor_type="paragraph",
+                    source_span=(offset, offset + len(text)),
+                ))
+                offset += len(text) + 1
+            table_offset = len(document.paragraphs)
+            for table_index, table in enumerate(document.tables):
+                for row_index, row in enumerate(table.rows):
+                    for cell_index, cell in enumerate(row.cells):
+                        text = "\n".join(p.text.strip() for p in cell.paragraphs if p.text.strip())
+                        if not text:
+                            continue
+                        anchors.append(DocumentAnchor(
+                            document_id=document_id, paragraph_index=table_offset,
+                            clause_id=f"T{table_index:03d}R{row_index:03d}C{cell_index:03d}",
+                            heading=heading, text=text, anchor_type="table_cell",
+                            table_index=table_index, row_index=row_index, cell_index=cell_index,
+                            source_span=(offset, offset + len(text)),
+                        ))
+                        table_offset += 1
+                        offset += len(text) + 1
+            text = "\n\n".join(anchor.text for anchor in anchors)
+            return [DocumentPage(source=filename, page_no=1, text=text, section="document")], anchors
         except Exception as exc:  # noqa: BLE001
             raise DocumentParserError(f"DOCX 解析失败：{exc}") from exc

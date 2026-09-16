@@ -28,6 +28,7 @@ class TempSettings:
         settings = Settings(
             task_dir=root / "tasks",
             upload_dir=root / "uploads",
+            output_dir=root / "outputs",
             contract_dir=root / "contracts",
             legal_kb_dir=kb_dir,
             playbook_dir=ROOT / "data" / "playbooks" if self.use_real_kb else root / "playbooks",
