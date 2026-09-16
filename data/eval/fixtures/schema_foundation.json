@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "dataset_name": "B1 Schema Output Fixture",
+    "dataset_version": "1.0.0-fixture",
+    "dataset_type": "schema",
+    "source_type": "synthetic",
+    "created_at": "2026-09-16T00:00:00Z",
+    "description": "Synthetic cases for validating the future schema-evaluator contract only."
+  },
+  "cases": [
+    {
+      "id": "SCHEMA-FIX-001",
+      "raw_output": {
+        "risk_level": "low",
+        "findings": []
+      },
+      "expected_parse_success": true,
+      "expected_raw_schema_pass": true,
+      "expected_repairable": false,
+      "notes": "Structurally valid synthetic output."
+    },
+    {
+      "id": "SCHEMA-FIX-002",
+      "raw_output": "{malformed-json",
+      "expected_parse_success": false,
+      "expected_raw_schema_pass": false,
+      "expected_repairable": false,
+      "notes": "Malformed synthetic output; no repair behavior is implemented in B1."
+    }
+  ]
+}

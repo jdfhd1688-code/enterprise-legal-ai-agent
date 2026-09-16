@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "dataset_name": "B1 Citation Schema Fixture",
+    "dataset_version": "1.0.0-fixture",
+    "dataset_type": "citation",
+    "source_type": "synthetic",
+    "created_at": "2026-09-16T00:00:00Z",
+    "description": "Synthetic cases for validating the citation dataset contract only."
+  },
+  "cases": [
+    {
+      "id": "CIT-FIX-001",
+      "finding": "付款期限偏离 synthetic playbook。",
+      "retrieval_hits": ["SYNTHETIC-PAYMENT-01"],
+      "expected_citation_ids": ["SYNTHETIC-PAYMENT-01"],
+      "expected_support": "supported"
+    },
+    {
+      "id": "CIT-FIX-002",
+      "finding": "合同必然无效。",
+      "retrieval_hits": [],
+      "expected_citation_ids": [],
+      "expected_support": "needs_human_review"
+    }
+  ]
+}

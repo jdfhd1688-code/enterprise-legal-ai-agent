@@ -8,6 +8,7 @@ Thumbs.db
 data/tasks/*.json
 data/uploads/
 data/outputs/
+artifacts/evaluation/runs/
 data/contracts/*.pdf
 !data/contracts/README.md
 !data/contracts/sample_contract.pdf

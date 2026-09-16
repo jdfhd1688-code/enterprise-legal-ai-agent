@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "dataset_name": "B1 Risk Schema Fixture",
+    "dataset_version": "1.0.0-fixture",
+    "dataset_type": "risk",
+    "source_type": "synthetic",
+    "created_at": "2026-09-16T00:00:00Z",
+    "description": "Synthetic cases for validating the risk dataset contract only."
+  },
+  "cases": [
+    {
+      "id": "RISK-FIX-001",
+      "clause": "乙方承担全部间接损失且责任不设上限。",
+      "evidence": ["SYNTHETIC-PLAYBOOK-LIABILITY"],
+      "expected_risk": "high",
+      "expected_route": "human_review",
+      "expected_human_review": true,
+      "reason": "Synthetic unlimited-liability example."
+    },
+    {
+      "id": "RISK-FIX-002",
+      "clause": "付款期限为收到有效发票后三十日。",
+      "evidence": ["SYNTHETIC-PLAYBOOK-PAYMENT"],
+      "expected_risk": "low",
+      "expected_route": "auto_report",
+      "expected_human_review": false,
+      "reason": "Synthetic in-policy payment example."
+    }
+  ]
+}

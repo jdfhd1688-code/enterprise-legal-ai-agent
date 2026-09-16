@@ -1,0 +1,32 @@
+{
+  "metadata": {
+    "dataset_name": "B1 Retrieval Schema Fixture",
+    "dataset_version": "1.0.0-fixture",
+    "dataset_type": "retrieval",
+    "source_type": "synthetic",
+    "created_at": "2026-09-16T00:00:00Z",
+    "description": "Synthetic cases for validating the retrieval dataset contract only."
+  },
+  "cases": [
+    {
+      "id": "RET-FIX-001",
+      "query": "付款期限是否超过企业标准",
+      "query_type": "contract",
+      "expected_doc_ids": ["DEMO-PAYMENT-V1"],
+      "jurisdiction": "中国大陆",
+      "law_status": "effective",
+      "legal_domain": "contract",
+      "notes": "Synthetic fixture; not a performance case."
+    },
+    {
+      "id": "RET-FIX-002",
+      "query": "责任限制条款应参考哪些公开规则",
+      "query_type": "legal",
+      "expected_doc_ids": ["DEMO-LIABILITY-V1", "DEMO-CONTRACT-V1"],
+      "jurisdiction": "中国大陆",
+      "law_status": "effective",
+      "legal_domain": "contract",
+      "notes": "Multiple expected document IDs validate the future multi-label contract."
+    }
+  ]
+}

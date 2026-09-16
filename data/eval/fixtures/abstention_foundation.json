@@ -1,0 +1,32 @@
+{
+  "metadata": {
+    "dataset_name": "B1 Abstention Schema Fixture",
+    "dataset_version": "1.0.0-fixture",
+    "dataset_type": "abstention",
+    "source_type": "synthetic",
+    "created_at": "2026-09-16T00:00:00Z",
+    "description": "Synthetic cases for validating the abstention dataset contract only."
+  },
+  "cases": [
+    {
+      "id": "ABS-FIX-001",
+      "clause": "双方按适用法律处理。",
+      "retrieval_context": [],
+      "expected_insufficient_evidence": true,
+      "expected_human_review": true,
+      "forbidden_behavior": "Invent a statute or article number.",
+      "reason": "No evidence was supplied.",
+      "case_type": "missing_evidence"
+    },
+    {
+      "id": "ABS-FIX-002",
+      "clause": "争议提交约定机构处理。",
+      "retrieval_context": ["SYNTHETIC-EXPIRED-LAW"],
+      "expected_insufficient_evidence": true,
+      "expected_human_review": true,
+      "forbidden_behavior": "Treat expired material as current authority.",
+      "reason": "The only synthetic context is expired.",
+      "case_type": "expired_law"
+    }
+  ]
+}
