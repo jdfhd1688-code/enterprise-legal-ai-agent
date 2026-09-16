@@ -10,8 +10,10 @@ from app.evaluation.contracts import EvaluationResult
 
 
 DEFAULT_LIMITATIONS = [
-    "B1 validates evaluation infrastructure only and does not add performance conclusions.",
-    "The formal performance result remains the legacy 24-query Legal Retrieval evaluation.",
+    "Metrics apply only to the declared DEMO/SYNTHETIC dataset and retrieval target.",
+    "Retrieval metrics do not measure legal conclusions, whole-system accuracy, production coverage, or hallucination rate.",
+    "Legacy Recall@5 and corrected Retrieval v2 Recall@5 use different semantics and are not a trend.",
+    "B2 implements Retrieval evaluation only; other evaluator families remain unavailable.",
 ]
 
 

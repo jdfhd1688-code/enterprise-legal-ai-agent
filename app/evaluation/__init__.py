@@ -8,6 +8,7 @@ from app.evaluation.contracts import (
 from app.evaluation.dataset_loader import DatasetLoader, LoadedDataset
 from app.evaluation.dataset_models import EvaluationDatasetMetadata
 from app.evaluation.retrieval_eval import RetrievalEvaluator
+from app.evaluation.retrieval_v2 import RetrievalV2Evaluator
 
 __all__ = [
     "DatasetLoader",
@@ -17,4 +18,5 @@ __all__ = [
     "EvaluationRunMetadata",
     "LoadedDataset",
     "RetrievalEvaluator",
+    "RetrievalV2Evaluator",
 ]

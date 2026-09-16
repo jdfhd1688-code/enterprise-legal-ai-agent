@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictEvaluationModel(BaseModel):
@@ -73,11 +73,28 @@ class RetrievalEvalCase(StrictEvaluationModel):
     id: str = Field(min_length=1)
     query: str = Field(min_length=1)
     query_type: QueryType
-    expected_doc_ids: list[str] = Field(min_length=1)
+    expected_doc_ids: list[str]
+    expected_no_relevant_result: bool = False
     jurisdiction: str | None = None
     law_status: str | None = None
     legal_domain: str | None = None
+    corpus_path: str | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_relevance_contract(self) -> "RetrievalEvalCase":
+        if any(not item.strip() for item in self.expected_doc_ids):
+            raise ValueError("expected_doc_ids cannot contain blank IDs")
+        if len(self.expected_doc_ids) != len(set(self.expected_doc_ids)):
+            raise ValueError("expected_doc_ids cannot contain duplicates")
+        if self.expected_no_relevant_result and self.expected_doc_ids:
+            raise ValueError("negative retrieval cases cannot declare expected_doc_ids")
+        if not self.expected_no_relevant_result and not self.expected_doc_ids:
+            raise ValueError(
+                "positive retrieval cases require expected_doc_ids; use "
+                "expected_no_relevant_result=true for explicit negatives"
+            )
+        return self
 
 
 class RiskEvalCase(StrictEvaluationModel):
