@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 
 from app.config import Settings, get_settings
+from app.rag.relevance_gate import RelevanceGate
 from app.schemas.kb import KBChunk, RetrievalHit, RetrievalResult
 from app.tools.embeddings import HashingEmbedder
 from app.tools.vector_search_tool import VectorSearchTool
@@ -27,9 +28,11 @@ class KnowledgeBaseTool:
         self,
         settings: Settings | None = None,
         embedder: HashingEmbedder | None = None,
+        relevance_gate: RelevanceGate | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.embedder = embedder or HashingEmbedder()
+        self.relevance_gate = relevance_gate or RelevanceGate()
         self.chunks: list[KBChunk] = []
         self.search_tool = VectorSearchTool()
         self.load_warnings: list[str] = []
@@ -173,9 +176,10 @@ class KnowledgeBaseTool:
             for index in range(len(candidates))
         }
         max_fusion = max(fusion_raw.values(), default=1.0)
-        fused = sorted(fusion_raw, key=fusion_raw.get, reverse=True)[:top_k]
+        fused = sorted(fusion_raw, key=fusion_raw.get, reverse=True)
         hits: list[RetrievalHit] = []
-        for rank, index in enumerate(fused, 1):
+        rejected: list[dict[str, object]] = []
+        for candidate_rank, index in enumerate(fused, 1):
             score = fusion_raw[index] / max_fusion
             if score < min_score:
                 continue
@@ -184,15 +188,21 @@ class KnowledgeBaseTool:
             dense_score = dense_scores.get(index, 0.0)
             reason = self._match_reason(query, chunk, keyword_score, dense_score)
             validity = self._validity_status(chunk)
-            hits.append(
-                RetrievalHit(
+            candidate_text = f"{chunk.title} {chunk.article_no} {chunk.content}"
+            decision = self.relevance_gate.evaluate(
+                query,
+                candidate_text,
+                keyword_raw.get(index, 0.0),
+                self._tokens,
+            )
+            hit = RetrievalHit(
                     chunk=chunk,
                     score=round(score, 4),
                     similarity_score=round(dense_score, 4),
                     keyword_score=round(keyword_score, 4),
                     dense_score=round(dense_score, 4),
                     fusion_score=round(score, 4),
-                    rank=rank,
+                    rank=len(hits) + 1,
                     matched_text=chunk.content[:180],
                     match_reason=reason,
                     metadata={
@@ -206,11 +216,27 @@ class KnowledgeBaseTool:
                         "version": chunk.version,
                     },
                     validity_status=validity,
+                    raw_bm25_score=round(keyword_raw.get(index, 0.0), 6),
+                    query_coverage=round(decision.query_coverage, 6),
+                    matched_terms=list(decision.matched_terms),
+                    is_usable=decision.is_usable,
+                    relevance_status=decision.status,
                 )
-            )
+            if decision.is_usable and len(hits) < top_k:
+                hits.append(hit)
+            elif not decision.is_usable:
+                rejected.append({
+                    "chunk_id": chunk.chunk_id,
+                    "candidate_rank": candidate_rank,
+                    "fusion_score": round(score, 4),
+                    "raw_bm25_score": round(keyword_raw.get(index, 0.0), 6),
+                    "query_coverage": round(decision.query_coverage, 6),
+                    "matched_terms": list(decision.matched_terms),
+                    "reason": decision.reason,
+                })
         insufficient = None
         if not hits:
-            insufficient = "没有高于阈值的法规命中。"
+            insufficient = "没有通过相关性门控的现行有效法规命中。"
         elif any(hit.validity_status not in {"current", "effective"} for hit in hits):
             insufficient = "部分/全部依据已过期、失效或状态不明，不能作为强证据。"
         return RetrievalResult(
@@ -226,6 +252,9 @@ class KnowledgeBaseTool:
             dense_hits=[candidates[item.index].chunk_id for item in dense_scored[:top_k]],
             fusion_method="rrf-k60",
             top_k=top_k,
+            candidate_count=len(fused),
+            relevance_gate_rejection_count=len(rejected),
+            rejected_candidates=rejected[:10],
         )
 
     @staticmethod

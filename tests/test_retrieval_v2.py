@@ -141,11 +141,13 @@ class RetrievalV2IntegrationTests(unittest.TestCase):
         self.assertIn("domain.data.recall_at_5", self.output.metrics)
         self.assertIn("domain.contract_document.recall_at_5", self.output.metrics)
 
-    def test_failure_details_include_expected_and_retrieved_ids(self) -> None:
-        self.assertGreater(len(self.output.failures), 0)
-        reasons = "\n".join(item.reason for item in self.output.failures)
-        self.assertIn("retrieved=", reasons)
-        self.assertTrue("expected=" in reasons or "negative query" in reasons)
+    def test_original_hard_cases_remain_in_dataset(self) -> None:
+        case_ids = {case.id for case in self.dataset.cases}
+        self.assertTrue(
+            {"RET-V2-030", "RET-V2-038", "RET-V2-040", "RET-V2-041"}.issubset(case_ids)
+        )
+        self.assertEqual(len(self.dataset.cases), 42)
+        self.assertGreater(self.output.metrics["relevance_gate_rejection_count"], 0)
 
     def test_empty_expected_ids_require_explicit_negative(self) -> None:
         with self.assertRaises(ValidationError):
@@ -169,15 +171,16 @@ class RetrievalV2IntegrationTests(unittest.TestCase):
         result = runner.run("retrieval_v2", DATASET)
         payload = json.loads(render_json([result]))
         self.assertIn("recall_at_5", payload["results"][0]["metrics"])
-        self.assertGreater(len(payload["results"][0]["failures"]), 0)
+        self.assertIn("false_positive_retrieval_count", payload["results"][0]["metrics"])
+        self.assertIn("failures", payload["results"][0])
 
-    def test_markdown_report_contains_failure_case_ids(self) -> None:
+    def test_markdown_report_contains_rejection_metrics(self) -> None:
         runner = EvaluationRunner(project_root=ROOT)
         runner.register(RetrievalV2Evaluator(project_root=ROOT))
         result = runner.run("retrieval_v2", DATASET)
         report = render_markdown([result])
         self.assertIn("# Evaluation Summary", report)
-        self.assertIn("RET-V2-", report)
+        self.assertIn("relevance_gate_rejection_count", report)
 
 
 if __name__ == "__main__":

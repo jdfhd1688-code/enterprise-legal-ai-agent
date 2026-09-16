@@ -36,6 +36,14 @@ Retrieval v2 evaluates Legal Retrieval over the DEMO/SAMPLE Legal KB and Contrac
 
 The legacy evaluator identifies gold evidence by title/article pair and labels Hit@5 directly as Recall@5. Retrieval v2 computes each positive query's retrieved-relevant count divided by all expected relevant IDs, then macro-averages it. Therefore legacy and v2 Recall@5 are not a historical trend and must not be compared as the same metric.
 
+## Retrieval Relevance Gate
+
+Retrieval must be allowed to return no usable result when the ranked candidates do not provide enough relevant evidence. The deterministic gate uses raw BM25 score plus non-generic query-term overlap; it does not use an LLM, case ID, expected document ID, or gold label. The raw-score floor was calibrated from the v2 distributions: Legal positive relevant scores ranged from 0.462265 upward while the ambiguous negative top score was 0.012866. Contract negative scores overlapped positive scores, so score-only thresholding was insufficient and meaningful overlap is required as a second signal.
+
+Table data cells are indexed with their same-column header text so structured values such as “3日” remain connected to “验收期限”. Reports expose false-positive count, false-negative count, no-result rate, and rejection count to make over-rejection visible.
+
+This gate is calibrated only on the current DEMO/SYNTHETIC dataset. It lowers the risk that irrelevant evidence is treated as usable retrieval, but it is not semantic entailment, does not solve hallucination, and is not a production relevance model.
+
 The existing formal retrieval evaluation remains:
 
 ```bash

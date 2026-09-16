@@ -10,6 +10,7 @@ from app.evaluation.contracts import EvaluationFailure, EvaluatorOutput
 from app.evaluation.dataset_loader import LoadedDataset
 from app.evaluation.dataset_models import DatasetType, QueryType, RetrievalEvalCase
 from app.rag.contract_retriever import ContractRetriever
+from app.schemas.document import DocumentChunk
 from app.skills.chunker import ChunkerSkill
 from app.skills.document_parser import DocumentParserSkill
 from app.tools.knowledge_base_tool import KnowledgeBaseTool
@@ -19,6 +20,7 @@ from app.tools.knowledge_base_tool import KnowledgeBaseTool
 class RetrievalCaseOutcome:
     case: RetrievalEvalCase
     retrieved_ids: list[str]
+    rejection_count: int = 0
 
 
 def calculate_metrics(outcomes: list[RetrievalCaseOutcome]) -> dict[str, float | int]:
@@ -40,23 +42,34 @@ def calculate_metrics(outcomes: list[RetrievalCaseOutcome]) -> dict[str, float |
             reciprocal_rank += 1 / first_rank
     positive_total = len(positives)
     correct_negatives = sum(not outcome.retrieved_ids for outcome in negatives)
+    false_positive_count = sum(bool(outcome.retrieved_ids) for outcome in negatives)
+    false_negative_count = sum(not outcome.retrieved_ids for outcome in positives)
+    no_result_count = sum(not outcome.retrieved_ids for outcome in outcomes)
     negative_total = len(negatives)
+    total = len(outcomes)
+    macro_recall = round(recall_at_5 / positive_total, 4) if positive_total else 0.0
     return {
         "positive_case_count": positive_total,
         "hit_at_1": round(hit_counts[1] / positive_total, 4) if positive_total else 0.0,
         "hit_at_3": round(hit_counts[3] / positive_total, 4) if positive_total else 0.0,
         "hit_at_5": round(hit_counts[5] / positive_total, 4) if positive_total else 0.0,
-        "recall_at_5": round(recall_at_5 / positive_total, 4) if positive_total else 0.0,
+        "recall_at_5": macro_recall,
+        "positive_query_recall": macro_recall,
         "mrr": round(reciprocal_rank / positive_total, 4) if positive_total else 0.0,
         "negative_case_count": negative_total,
         "correct_no_relevant_count": correct_negatives,
         "negative_accuracy": round(correct_negatives / negative_total, 4) if negative_total else 0.0,
+        "false_positive_retrieval_count": false_positive_count,
+        "false_negative_retrieval_count": false_negative_count,
+        "no_result_count": no_result_count,
+        "no_result_rate": round(no_result_count / total, 4) if total else 0.0,
+        "relevance_gate_rejection_count": sum(item.rejection_count for item in outcomes),
     }
 
 
 class RetrievalV2Evaluator:
     name = "retrieval_v2"
-    version = "retrieval-v2.0"
+    version = "retrieval-v2.1-relevance-gate"
 
     def __init__(
         self,
@@ -67,7 +80,7 @@ class RetrievalV2Evaluator:
         self.project_root = (project_root or Path(__file__).resolve().parents[2]).resolve()
         self.kb_tool = kb_tool or KnowledgeBaseTool()
         self.contract_retriever = contract_retriever or ContractRetriever()
-        self._contract_cache: dict[Path, list] = {}
+        self._contract_cache: dict[Path, list[DocumentChunk]] = {}
 
     def evaluate(self, dataset: LoadedDataset) -> EvaluatorOutput:
         if dataset.metadata.dataset_type != DatasetType.retrieval:
@@ -75,9 +88,16 @@ class RetrievalV2Evaluator:
         cases = [case for case in dataset.cases if isinstance(case, RetrievalEvalCase)]
         if len(cases) != len(dataset.cases):
             raise ValueError("retrieval_v2 dataset contains non-retrieval cases")
-        outcomes = [
-            RetrievalCaseOutcome(case=case, retrieved_ids=self._retrieve(case)) for case in cases
-        ]
+        outcomes = []
+        for case in cases:
+            retrieved_ids, rejection_count = self._retrieve(case)
+            outcomes.append(
+                RetrievalCaseOutcome(
+                    case=case,
+                    retrieved_ids=retrieved_ids,
+                    rejection_count=rejection_count,
+                )
+            )
         metrics = calculate_metrics(outcomes)
         by_type: dict[str, list[RetrievalCaseOutcome]] = defaultdict(list)
         by_domain: dict[str, list[RetrievalCaseOutcome]] = defaultdict(list)
@@ -98,10 +118,11 @@ class RetrievalV2Evaluator:
             warnings=[
                 "Retrieval metrics describe only this DEMO/SYNTHETIC dataset and KB.",
                 "Legacy Recall@5 used Hit@5 semantics and is not directly comparable to corrected v2 Recall@5.",
+                "The deterministic relevance gate reduces irrelevant evidence risk but is not a semantic entailment judge.",
             ],
         )
 
-    def _retrieve(self, case: RetrievalEvalCase) -> list[str]:
+    def _retrieve(self, case: RetrievalEvalCase) -> tuple[list[str], int]:
         if case.query_type == QueryType.legal:
             result = self.kb_tool.search(
                 case.query,
@@ -113,7 +134,10 @@ class RetrievalV2Evaluator:
                     "source_type": "demo_sample",
                 },
             )
-            return [hit.chunk.chunk_id for hit in result.hits]
+            return (
+                [hit.chunk.chunk_id for hit in result.hits],
+                result.relevance_gate_rejection_count,
+            )
         if not case.corpus_path:
             raise ValueError(f"Contract case {case.id} requires corpus_path")
         corpus = (self.project_root / case.corpus_path).resolve()
@@ -124,9 +148,8 @@ class RetrievalV2Evaluator:
             parsed = DocumentParserSkill().parse(corpus.name, corpus.read_bytes())
             chunks = ChunkerSkill().chunk(parsed)
             self._contract_cache[corpus] = chunks
-        return [
-            hit.chunk_id for hit in self.contract_retriever.retrieve(chunks, case.query, top_k=5)
-        ]
+        result = self.contract_retriever.search(chunks, case.query, top_k=5)
+        return [hit.chunk_id for hit in result.hits], result.rejection_count
 
     @staticmethod
     def _prefixed(prefix: str, metrics: dict[str, float | int]) -> dict[str, float | int]:

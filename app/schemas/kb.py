@@ -37,6 +37,11 @@ class RetrievalHit(BaseModel):
     match_reason: str = "semantic_similarity"
     metadata: dict[str, str] = Field(default_factory=dict)
     validity_status: str = "unknown"
+    raw_bm25_score: float = Field(default=0.0, ge=0.0)
+    query_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+    matched_terms: list[str] = Field(default_factory=list)
+    is_usable: bool = True
+    relevance_status: str = "usable"
 
 
 class RetrievalResult(BaseModel):
@@ -54,6 +59,9 @@ class RetrievalResult(BaseModel):
     fusion_method: str = "rrf-k60"
     top_k: int = 0
     jurisdiction_assumption: str | None = None
+    candidate_count: int = 0
+    relevance_gate_rejection_count: int = 0
+    rejected_candidates: list[dict[str, object]] = Field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
